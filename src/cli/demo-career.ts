@@ -1,5 +1,5 @@
 /**
- * Demo: create a young player, place them, run a season.
+ * Demo: player career placement + partial season.
  */
 
 import { createWorld } from "../world/world.js";
@@ -9,8 +9,8 @@ import { describeUserStanding } from "../career/selection.js";
 import {
   startSeason,
   playFullSeason,
-  endSeasonProcessing,
   playMatchday,
+  endSeasonProcessing,
 } from "../competitions/season.js";
 
 console.log("=== PLAYER CAREER DEMO ===\n");
@@ -33,7 +33,9 @@ console.log("PLACEMENT");
 console.log(placement.reason);
 console.log(`Club: ${placement.club?.name} (Rep ${placement.club?.reputation})`);
 console.log();
+console.log("STANDING AT JOIN");
 console.log(describeUserStanding(world));
+console.log();
 
 const competition = startSeason(world);
 console.log("Playing first 10 matchdays...\n");
@@ -48,7 +50,7 @@ console.log(
 );
 console.log(describeUserStanding(world));
 
-console.log("Completing season...");
+console.log("\nCompleting season...");
 playFullSeason(world, competition.id);
 endSeasonProcessing(world);
-console.log(`Aged to ${user.age}, OVR ${user.ovr}, career apps ${user.careerAppearances}`);
+console.log(`Aged to ${user.age}, OVR ${user.ovr}, POT ${user.potential}`);

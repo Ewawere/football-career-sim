@@ -1,49 +1,39 @@
 /**
- * Injury type definitions.
+ * Injury definitions and instance types.
  */
 
 import type { EntityId, GameDate } from "../core/types.js";
 
 export type InjurySeverity = "Minor" | "Moderate" | "Severe";
 export type BodyArea =
-  | "General"
-  | "Thigh"
-  | "Hamstring"
   | "Ankle"
+  | "Knee"
+  | "Hamstring"
   | "Groin"
   | "Calf"
-  | "Knee"
+  | "Thigh"
+  | "Shoulder"
+  | "Head"
+  | "Back"
   | "Foot"
-  | "Head";
-
-export type InjuryTypeId =
-  | "Knock"
-  | "Bruise"
-  | "MinorMuscle"
-  | "HamstringStrain"
-  | "AnkleSprain"
-  | "GroinStrain"
-  | "CalfStrain"
-  | "KneeLigament"
-  | "Fracture"
-  | "SeriousMuscle"
-  | "Concussion";
+  | "Hip"
+  | "Other";
 
 export interface InjuryDefinition {
-  typeId: InjuryTypeId;
+  typeId: string;
   name: string;
   severity: InjurySeverity;
   bodyArea: BodyArea;
   recoveryDays: [number, number];
   weight: number;
-  forcesWithdrawal: boolean;
   recurrenceMultiplier: number;
+  forcesWithdrawal: boolean;
 }
 
 export interface Injury {
   id: EntityId;
   playerId: EntityId;
-  typeId: InjuryTypeId;
+  typeId: string;
   name: string;
   severity: InjurySeverity;
   bodyArea: BodyArea;
@@ -56,15 +46,14 @@ export interface Injury {
 }
 
 export const INJURY_DEFINITIONS: InjuryDefinition[] = [
-  { typeId: "Knock", name: "Knock", severity: "Minor", bodyArea: "General", recoveryDays: [1, 5], weight: 28, forcesWithdrawal: false, recurrenceMultiplier: 1.1 },
-  { typeId: "Bruise", name: "Bruise", severity: "Minor", bodyArea: "General", recoveryDays: [2, 7], weight: 18, forcesWithdrawal: false, recurrenceMultiplier: 1.0 },
-  { typeId: "MinorMuscle", name: "Minor muscle issue", severity: "Minor", bodyArea: "Thigh", recoveryDays: [3, 10], weight: 16, forcesWithdrawal: true, recurrenceMultiplier: 1.2 },
-  { typeId: "HamstringStrain", name: "Hamstring strain", severity: "Moderate", bodyArea: "Hamstring", recoveryDays: [14, 35], weight: 10, forcesWithdrawal: true, recurrenceMultiplier: 1.5 },
-  { typeId: "AnkleSprain", name: "Ankle sprain", severity: "Moderate", bodyArea: "Ankle", recoveryDays: [10, 28], weight: 10, forcesWithdrawal: true, recurrenceMultiplier: 1.4 },
-  { typeId: "GroinStrain", name: "Groin strain", severity: "Moderate", bodyArea: "Groin", recoveryDays: [12, 30], weight: 8, forcesWithdrawal: true, recurrenceMultiplier: 1.3 },
-  { typeId: "CalfStrain", name: "Calf strain", severity: "Moderate", bodyArea: "Calf", recoveryDays: [10, 25], weight: 8, forcesWithdrawal: true, recurrenceMultiplier: 1.35 },
-  { typeId: "KneeLigament", name: "Knee ligament injury", severity: "Severe", bodyArea: "Knee", recoveryDays: [90, 240], weight: 2, forcesWithdrawal: true, recurrenceMultiplier: 1.8 },
-  { typeId: "Fracture", name: "Fracture", severity: "Severe", bodyArea: "Foot", recoveryDays: [42, 120], weight: 1.5, forcesWithdrawal: true, recurrenceMultiplier: 1.2 },
-  { typeId: "SeriousMuscle", name: "Serious muscle injury", severity: "Severe", bodyArea: "Thigh", recoveryDays: [45, 90], weight: 2.5, forcesWithdrawal: true, recurrenceMultiplier: 1.6 },
-  { typeId: "Concussion", name: "Concussion", severity: "Moderate", bodyArea: "Head", recoveryDays: [7, 21], weight: 3, forcesWithdrawal: true, recurrenceMultiplier: 1.7 },
+  { typeId: "knock", name: "Knock", severity: "Minor", bodyArea: "Other", recoveryDays: [1, 5], weight: 28, recurrenceMultiplier: 1.0, forcesWithdrawal: false },
+  { typeId: "bruise", name: "Bruise", severity: "Minor", bodyArea: "Thigh", recoveryDays: [2, 7], weight: 18, recurrenceMultiplier: 1.0, forcesWithdrawal: false },
+  { typeId: "minor_muscle", name: "Minor muscle issue", severity: "Minor", bodyArea: "Hamstring", recoveryDays: [5, 12], weight: 14, recurrenceMultiplier: 1.2, forcesWithdrawal: true },
+  { typeId: "ankle_sprain", name: "Ankle sprain", severity: "Moderate", bodyArea: "Ankle", recoveryDays: [14, 35], weight: 10, recurrenceMultiplier: 1.3, forcesWithdrawal: true },
+  { typeId: "hamstring", name: "Hamstring strain", severity: "Moderate", bodyArea: "Hamstring", recoveryDays: [18, 45], weight: 9, recurrenceMultiplier: 1.5, forcesWithdrawal: true },
+  { typeId: "groin", name: "Groin strain", severity: "Moderate", bodyArea: "Groin", recoveryDays: [14, 40], weight: 8, recurrenceMultiplier: 1.4, forcesWithdrawal: true },
+  { typeId: "calf", name: "Calf strain", severity: "Moderate", bodyArea: "Calf", recoveryDays: [12, 30], weight: 7, recurrenceMultiplier: 1.3, forcesWithdrawal: true },
+  { typeId: "acl", name: "ACL injury", severity: "Severe", bodyArea: "Knee", recoveryDays: [180, 300], weight: 1.5, recurrenceMultiplier: 1.8, forcesWithdrawal: true },
+  { typeId: "fracture", name: "Fracture", severity: "Severe", bodyArea: "Foot", recoveryDays: [60, 120], weight: 2, recurrenceMultiplier: 1.2, forcesWithdrawal: true },
+  { typeId: "serious_muscle", name: "Serious muscle tear", severity: "Severe", bodyArea: "Thigh", recoveryDays: [50, 90], weight: 2.5, recurrenceMultiplier: 1.6, forcesWithdrawal: true },
 ];

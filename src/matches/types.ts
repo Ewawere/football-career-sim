@@ -1,11 +1,30 @@
 /**
- * Match domain types.
+ * Match-related types.
  */
 
 import type { EntityId, GameDate } from "../core/types.js";
-import type { FormationId, TacticalRole } from "./tactics.js";
 
-export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Postponed";
+export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled";
+export type MomentType =
+  | "OneVOne"
+  | "ShotOpportunity"
+  | "Penalty"
+  | "CounterAttack"
+  | "ThroughBall"
+  | "Header"
+  | "Cross"
+  | "FreeKick"
+  | "Tackle"
+  | "Press"
+  | "Interception"
+  | "DefensiveRecovery"
+  | "RiskyPass"
+  | "ShortPass"
+  | "Save"
+  | "ClaimCross";
+
+export type TacticalRole = string;
+export type FormationId = string;
 
 export interface MatchTeamLineup {
   clubId: EntityId;
@@ -59,6 +78,15 @@ export interface MatchContext {
   intensity: number;
 }
 
+export interface InteractiveMomentRecord {
+  minute: number;
+  momentType: string;
+  description: string;
+  chosenActionId: string;
+  outcome: string;
+  success: boolean;
+}
+
 export interface Match {
   id: EntityId;
   competitionId: EntityId | null;
@@ -76,17 +104,6 @@ export interface Match {
   interactiveMoments: InteractiveMomentRecord[];
 }
 
-export interface MatchResultSummary {
-  matchId: EntityId;
-  homeClubId: EntityId;
-  awayClubId: EntityId;
-  homeScore: number;
-  awayScore: number;
-  events: MatchEvent[];
-  ratings: Map<EntityId, number>;
-  careerEffects?: CareerMatchEffects;
-}
-
 export interface CareerMatchEffects {
   playerId: EntityId;
   rating: number;
@@ -98,11 +115,13 @@ export interface CareerMatchEffects {
   notes: string[];
 }
 
-export interface InteractiveMomentRecord {
-  minute: number;
-  momentType: string;
-  description: string;
-  chosenActionId: string;
-  outcome: string;
-  success: boolean;
+export interface MatchResultSummary {
+  matchId: EntityId;
+  homeClubId: EntityId;
+  awayClubId: EntityId;
+  homeScore: number;
+  awayScore: number;
+  events: MatchEvent[];
+  ratings: Map<EntityId, number>;
+  careerEffects?: CareerMatchEffects;
 }
