@@ -1,12 +1,10 @@
 /**
  * Central World state.
- * Holds all entities and the simulation clock.
- * Designed to be serializable for save/load.
  */
 
-import type { EntityId, Seed, SeasonId } from "../core/types.js";
+import type { EntityId, Seed } from "../core/types.js";
 import { RNG } from "../core/rng.js";
-import { nextId } from "../core/id.js";
+import { seedIdGenerator } from "../core/id.js";
 import { createCalendar, type CalendarState } from "../core/calendar.js";
 import { EventBus } from "../core/events.js";
 import type { Player } from "../players/player.js";
@@ -41,6 +39,7 @@ export interface World {
 }
 
 export function createWorld(config: WorldConfig): World {
+  seedIdGenerator(config.seed);
   const rng = new RNG(config.seed);
   return {
     version: 2,
@@ -79,10 +78,10 @@ export function addClub(world: World, club: Club): void {
   world.clubs.set(club.id, club);
 }
 
-export function addCompetition(world: World, c: Competition): void {
-  world.competitions.set(c.id, c);
+export function addCompetition(world: World, competition: Competition): void {
+  world.competitions.set(competition.id, competition);
 }
 
-export function addFixture(world: World, f: Fixture): void {
-  world.fixtures.set(f.id, f);
+export function addFixture(world: World, fixture: Fixture): void {
+  world.fixtures.set(fixture.id, fixture);
 }

@@ -1,23 +1,19 @@
 /**
- * Entry point – boots a world and prints a summary.
+ * Package entry — re-exports core simulation surface.
  */
 
-import { createWorld } from "./world/world.js";
-import { bootstrapWorld } from "./world/bootstrap.js";
+export { createWorld, type World } from "./world/world.js";
+export { bootstrapWorld } from "./world/bootstrap.js";
+export { createCareerPlayer } from "./career/player-career.js";
+export {
+  startSeason,
+  playMatchday,
+  playFullSeason,
+  endSeasonProcessing,
+  beginNextSeason,
+} from "./competitions/season.js";
+export { createMatch, simulateMatch, formatMatchReport } from "./matches/engine.js";
+export { runTransferWindow } from "./transfers/window.js";
+export { saveToJson, loadFromJson } from "./save/serialize.js";
 
-console.log("=== Football Career Simulator ===");
-
-const world = createWorld({ seed: 42, startDate: "2026-07-01" });
-bootstrapWorld(world);
-
-console.log(`\nCalendar: ${world.calendar.currentDate} (${world.calendar.currentSeason})`);
-console.log(`Total players: ${world.players.size}`);
-console.log(`Total clubs: ${world.clubs.size}`);
-console.log(`Leagues: ${world.leagues.size}`);
-
-const ovrs = [...world.players.values()].map((p) => p.ovr);
-const avg = ovrs.reduce((a, b) => a + b, 0) / ovrs.length;
-const max = Math.max(...ovrs);
-const min = Math.min(...ovrs);
-console.log(`OVR range: ${min}–${max}  avg ${avg.toFixed(1)}`);
-console.log("\nFoundation OK.");
+console.log("Football Career Sim — import from modules or run npm run play:web");
