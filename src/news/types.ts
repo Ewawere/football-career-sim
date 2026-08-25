@@ -54,7 +54,7 @@ export interface NewsArticle {
 export interface SocialPost {
   id: EntityId;
   timestamp: GameDate;
-  authorType: "Fan" | "RivalFan" | "Journalist" | "Player" | "Club" | "FormerPlayer" | "Coach";
+  authorType?: "Fan" | "RivalFan" | "Journalist" | "Player" | "Club" | "FormerPlayer" | "Coach";
   authorLabel: string;
   content: string;
   sentiment: SentimentLabel;
@@ -62,8 +62,8 @@ export interface SocialPost {
   sourceEventId: string;
   relatedPlayerIds: EntityId[];
   relatedClubIds: EntityId[];
-  topic: string;
-  virality: number;
+  topic?: string;
+  virality?: number;
 }
 
 export interface FanSentimentState {

@@ -1,43 +1,58 @@
 /**
- * Create and manage national teams.
+ * National team registry.
  */
 
-import { nextId } from "../core/id.js";
 import type { World } from "../world/world.js";
-import type { NationalTeam, NationalTeamLevel } from "./types.js";
-import { CORE_NATIONS, nationStrength } from "./nations.js";
 
-const COACH_FIRST = ["Carlo", "Luis", "Gareth", "Didier", "Hansi", "Roberto", "Steve", "Fernando"];
-const COACH_LAST = ["Silva", "Martinez", "Andersen", "Okeke", "Schmidt", "Rossi", "Clarke", "Dubois"];
+export type NationalTeamLevel = "Senior" | "U21";
 
-export function getNationalTeams(world: World): Map<string, NationalTeam> {
-  if (!(world as any).nationalTeams) {
-    (world as any).nationalTeams = new Map();
-  }
-  return (world as any).nationalTeams;
+export interface NationalTeam {
+  nation: string;
+  level: NationalTeamLevel;
+  reputation: number;
+  squadIds: string[];
+}
+
+const DEFAULT_NATIONS: { nation: string; rep: number }[] = [
+  { nation: "England", rep: 86 },
+  { nation: "Spain", rep: 88 },
+  { nation: "France", rep: 90 },
+  { nation: "Germany", rep: 87 },
+  { nation: "Brazil", rep: 91 },
+  { nation: "Portugal", rep: 84 },
+  { nation: "Netherlands", rep: 83 },
+  { nation: "Nigeria", rep: 72 },
+  { nation: "Italy", rep: 85 },
+  { nation: "Argentina", rep: 89 },
+];
+
+function teamKey(nation: string, level: NationalTeamLevel): string {
+  return `${nation}|${level}`;
 }
 
 export function ensureNationalTeams(world: World): void {
-  const map = getNationalTeams(world);
-  if (map.size > 0) return;
-
-  for (const nation of CORE_NATIONS) {
+  if (!(world as any).nationalTeams) (world as any).nationalTeams = new Map();
+  const map = (world as any).nationalTeams as Map<string, NationalTeam>;
+  for (const n of DEFAULT_NATIONS) {
     for (const level of ["Senior", "U21"] as NationalTeamLevel[]) {
-      const id = nextId("nt");
-      const team: NationalTeam = {
-        id,
-        nation,
-        level,
-        reputation: level === "Senior" ? nationStrength(nation) : nationStrength(nation) - 12,
-        coachName: `${world.rng.pick(COACH_FIRST)} ${world.rng.pick(COACH_LAST)}`,
-        squadPlayerIds: [],
-        calledUpIds: [],
-      };
-      map.set(`${nation}:${level}`, team);
+      const k = teamKey(n.nation, level);
+      if (!map.has(k)) {
+        map.set(k, {
+          nation: n.nation,
+          level,
+          reputation: level === "U21" ? n.rep - 12 : n.rep,
+          squadIds: [],
+        });
+      }
     }
   }
 }
 
-export function getTeam(world: World, nation: string, level: NationalTeamLevel): NationalTeam | null {
-  return getNationalTeams(world).get(`${nation}:${level}`) ?? null;
+export function getTeam(
+  world: World,
+  nation: string,
+  level: NationalTeamLevel
+): NationalTeam | null {
+  ensureNationalTeams(world);
+  return (world as any).nationalTeams.get(teamKey(nation, level)) ?? null;
 }
