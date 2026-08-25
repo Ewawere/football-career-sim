@@ -4,7 +4,7 @@
 
 import type { World } from "../world/world.js";
 import { RNG } from "../core/rng.js";
-import { nextId } from "../core/id.js";
+import { seedIdGenerator, getIdCounter, resetIdCounter } from "../core/id.js";
 import type { Player } from "../players/player.js";
 import type { Club } from "../clubs/club.js";
 import type { Competition, Fixture, LeagueTableRow, SeasonState } from "../competitions/types.js";
@@ -15,6 +15,7 @@ export interface SerializedWorld {
   version: number;
   seed: number;
   rngState: number;
+  idCounter: number;
   calendar: World["calendar"];
   players: Player[];
   clubs: Club[];
@@ -32,12 +33,15 @@ export interface SerializedWorld {
 export function serializeWorld(world: World): SerializedWorld {
   const leagueTables: Record<string, LeagueTableRow[]> = {};
   for (const [k, v] of world.leagueTables) leagueTables[k] = v;
+
   const leagues: Record<string, string[]> = {};
   for (const [k, v] of world.leagues) leagues[k] = v;
+
   return {
     version: world.version,
     seed: world.seed,
-    rngState: (world.rng as any).state ?? world.seed,
+    rngState: world.rng.getState(),
+    idCounter: getIdCounter(),
     calendar: { ...world.calendar },
     players: [...world.players.values()],
     clubs: [...world.clubs.values()],
@@ -54,7 +58,12 @@ export function serializeWorld(world: World): SerializedWorld {
 }
 
 export function deserializeWorld(data: SerializedWorld): World {
+  seedIdGenerator(data.seed);
+  resetIdCounter(data.idCounter);
+
   const rng = new RNG(data.seed);
+  rng.setState(data.rngState);
+
   const world: World = {
     version: data.version,
     seed: data.seed,

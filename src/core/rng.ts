@@ -9,7 +9,6 @@ export class RNG {
 
   /** [0, 1) */
   next(): number {
-    // Mulberry32
     let t = (this.state += 0x6d2b79f5);
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -37,5 +36,13 @@ export class RNG {
     const v = this.next();
     const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
     return mean + z * std;
+  }
+
+  getState(): number {
+    return this.state;
+  }
+
+  setState(s: number): void {
+    this.state = s >>> 0;
   }
 }
