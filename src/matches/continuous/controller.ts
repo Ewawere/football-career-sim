@@ -1,20 +1,20 @@
 /**
- * PlayerMatchController — direct input for the career player only.
+ * Apply user commands to the continuous match player.
  */
 
-import type { ContinuousMatchState, ContinuousPlayer, UserCommand, Vec2 } from "./types.js";
+import type { ContinuousMatchState, UserCommand, Vec2 } from "./types.js";
 import { PITCH } from "./types.js";
-import { RNG } from "../../core/rng.js";
-
-function dist(a: Vec2, b: Vec2): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
+import type { RNG } from "../../core/rng.js";
 
 function clampPos(p: Vec2): Vec2 {
   return {
     x: Math.max(0.5, Math.min(PITCH.width - 0.5, p.x)),
     y: Math.max(0.5, Math.min(PITCH.height - 0.5, p.y)),
   };
+}
+
+function len(v: Vec2): number {
+  return Math.sqrt(v.x * v.x + v.y * v.y) || 1;
 }
 
 export function applyUserCommand(
@@ -26,53 +26,58 @@ export function applyUserCommand(
   const user = state.players.find((p) => p.isUser && p.onPitch);
   if (!user) return;
 
-  const baseSpeed = 8;
-  const sprintMul = 1.45;
+  const baseSpeed = 7 + (user.stamina / 100) * 2;
+  let sprint = false;
 
   switch (cmd.type) {
     case "Move": {
-      const speed = baseSpeed * (user.stamina > 15 ? 1 : 0.6);
+      const d = len(cmd.dir);
       user.velocity = {
-        x: cmd.dir.x * speed,
-        y: cmd.dir.y * speed,
+        x: (cmd.dir.x / d) * baseSpeed,
+        y: (cmd.dir.y / d) * baseSpeed,
       };
-      if (cmd.dir.x !== 0 || cmd.dir.y !== 0) {
-        user.facing = Math.atan2(cmd.dir.y, cmd.dir.x);
-      }
+      user.facing = Math.atan2(cmd.dir.y, cmd.dir.x);
       break;
     }
-    case "Sprint": {
-      if (cmd.active && user.stamina > 5) {
-        user.velocity.x *= sprintMul;
-        user.velocity.y *= sprintMul;
-        user.stamina = Math.max(0, user.stamina - 12 * dt);
+    case "Sprint":
+      sprint = cmd.active;
+      if (sprint) {
+        user.velocity = {
+          x: user.velocity.x * 1.35,
+          y: user.velocity.y * 1.35,
+        };
+        user.stamina = Math.max(0, user.stamina - 8 * dt);
       }
       break;
-    }
     case "Pass":
     case "ThroughBall":
-    case "Cross": {
-      if (!user.hasBall) break;
-      (user as any)._intent =
-        cmd.type === "ThroughBall" ? "through" : cmd.type === "Cross" ? "cross" : "pass";
-      (user as any)._aim = cmd.aim;
-      break;
-    }
-    case "Shoot": {
-      if (!user.hasBall) break;
-      (user as any)._intent = "shoot";
-      (user as any)._aim = cmd.aim;
-      break;
-    }
-    case "Tackle": {
-      if (user.hasBall) break;
-      if (dist(user.position, state.ball.position) < 2.5) {
-        (user as any)._intent = "tackle";
+    case "Cross":
+      if (user.hasBall) {
+        state.ball.ownerId = null;
+        user.hasBall = false;
+        state.ball.velocity = {
+          x: (cmd.aim.x - user.position.x) * 0.8,
+          y: (cmd.aim.y - user.position.y) * 0.8,
+        };
+        state.ball.position = { ...user.position };
+        (user as any)._intent = cmd.type === "ThroughBall" ? "through" : "pass";
       }
       break;
-    }
+    case "Shoot":
+      if (user.hasBall) {
+        state.ball.ownerId = null;
+        user.hasBall = false;
+        state.ball.velocity = {
+          x: (cmd.aim.x - user.position.x) * 1.2,
+          y: (cmd.aim.y - user.position.y) * 1.2,
+        };
+        (user as any)._intent = "shoot";
+      }
+      break;
+    case "Tackle":
+      (user as any)._intent = "tackle";
+      break;
     case "Idle":
-    default:
       user.velocity = { x: user.velocity.x * 0.85, y: user.velocity.y * 0.85 };
       break;
   }

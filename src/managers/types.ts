@@ -1,15 +1,9 @@
 /**
- * Manager career types.
+ * Manager entity types.
  */
 
 import type { EntityId, GameDate } from "../core/types.js";
 import type { TacticalIdentity, TransferPhilosophy } from "../clubs/club.js";
-
-export type ManagerStatus =
-  | "Employed"
-  | "Unemployed"
-  | "Retired"
-  | "OnGardenLeave";
 
 export interface ManagerAttributes {
   attacking: number;
@@ -20,6 +14,19 @@ export interface ManagerAttributes {
   negotiation: number;
   discipline: number;
   mediaHandling: number;
+}
+
+export type ManagerStatus = "Employed" | "Unemployed" | "Retired";
+
+export interface ManagerJobRecord {
+  clubId: EntityId;
+  clubName: string;
+  startDate: GameDate;
+  endDate: GameDate | null;
+  reason: string;
+  matches: number;
+  wins: number;
+  trophies: number;
 }
 
 export interface Manager {
@@ -45,45 +52,4 @@ export interface Manager {
   isUserControlled: boolean;
   boardConfidence: number;
   jobHistory: ManagerJobRecord[];
-}
-
-export interface ManagerJobRecord {
-  clubId: EntityId;
-  clubName: string;
-  startDate: GameDate;
-  endDate: GameDate | null;
-  reason: "Resigned" | "Sacked" | "ContractEnded" | "Active" | null;
-  matches: number;
-  wins: number;
-  trophies: number;
-}
-
-export interface BoardExpectation {
-  leaguePositionMin: number;
-  cupProgress: boolean;
-  financialFairPlay: boolean;
-  style: "Results" | "Youth" | "Entertainment" | "Balanced";
-}
-
-export interface JobOffer {
-  id: EntityId;
-  clubId: EntityId;
-  clubName: string;
-  reputation: number;
-  wageWeekly: number;
-  contractYears: number;
-  expectations: BoardExpectation;
-  status: "Open" | "Accepted" | "Declined" | "Expired";
-}
-
-export interface ManagerSeasonSummary {
-  seasonId: string;
-  clubId: EntityId;
-  position: number;
-  points: number;
-  wins: number;
-  draws: number;
-  losses: number;
-  boardConfidenceEnd: number;
-  sacked: boolean;
 }

@@ -1,6 +1,6 @@
 /**
  * Continuous 22-player match state.
- * Pitch: 105m x 68m, origin bottom-left of defending goal for home.
+ * Pitch: 105m x 68m.
  */
 
 import type { EntityId } from "../../core/types.js";
@@ -44,6 +44,15 @@ export type UserCommand =
   | { type: "Tackle" }
   | { type: "Idle" };
 
+export interface ContinuousMatchEvent {
+  minute: number;
+  type: "Goal" | "Shot" | "Pass" | "Tackle" | "Foul" | "Card" | "Injury" | "Sub" | "KickOff";
+  playerId?: EntityId;
+  clubSide?: PitchSide;
+  description: string;
+  meta?: Record<string, unknown>;
+}
+
 export interface ContinuousMatchState {
   matchId: EntityId;
   minute: number;
@@ -59,15 +68,6 @@ export interface ContinuousMatchState {
   events: ContinuousMatchEvent[];
   userPlayerId: EntityId | null;
   tick: number;
-}
-
-export interface ContinuousMatchEvent {
-  minute: number;
-  type: "Goal" | "Shot" | "Pass" | "Tackle" | "Foul" | "Card" | "Injury" | "Sub" | "KickOff";
-  playerId?: EntityId;
-  clubSide?: PitchSide;
-  description: string;
-  meta?: Record<string, unknown>;
 }
 
 export const PITCH = { width: 105, height: 68 } as const;
