@@ -8,14 +8,18 @@ import { addClub, addPlayer } from "./world.js";
 import { generateEnglishTopLeague } from "../clubs/generation.js";
 import { generateSquad } from "../players/generation.js";
 import { attachMediaSystems } from "../news/attach.js";
+import { attachSocialEngine } from "../social/engine.js";
+import { attachFanEngine } from "../social/fans.js";
 import { ensureNationalTeams } from "../international/teams.js";
 import { assignManagersToClubs } from "../managers/generation.js";
 
 export function bootstrapWorld(world: World): void {
   try {
     attachMediaSystems(world);
-  } catch {
-    /* optional until full media stack is present */
+    attachSocialEngine(world);
+    attachFanEngine(world);
+  } catch (e) {
+    console.warn("[Bootstrap] media attach partial", e);
   }
   ensureNationalTeams(world);
   if (!(world as any).personalities) (world as any).personalities = new Map();
@@ -41,6 +45,11 @@ export function bootstrapWorld(world: World): void {
       };
       p.currentClubId = club.id;
       addPlayer(world, p);
+      const pending = (p as any)._pendingPersonality;
+      if (pending) {
+        (world as any).personalities.set(pending.id, pending);
+        delete (p as any)._pendingPersonality;
+      }
       club.squadPlayerIds.push(p.id);
     }
 
@@ -56,6 +65,6 @@ export function bootstrapWorld(world: World): void {
   assignManagersToClubs(world);
 
   console.log(
-    `[Bootstrap] Created ${clubs.length} clubs, ${world.players.size} players, managers ${((world as any).managers?.size ?? 0)}`
+    `[Bootstrap] Created ${clubs.length} clubs, ${world.players.size} players`
   );
 }
