@@ -1,36 +1,31 @@
 # Football Career Simulator
 
 Original deep football career simulation — mobile-first, simulation-first.
+**Not affiliated with EA Sports FC.**
 
-## Quick start
+## Repo status (upload in progress)
+
+Core foundation is on GitHub. Full source is **~116 files**; the sandbox cannot `git push` with credentials, so files are uploaded in batches via the GitHub API.
+
+**On GitHub now:** package/tsconfig, core, world, clubs, types for contracts/competitions/personality/relationships/scouting/youth/awards, demo-match, index.
+
+**Still uploading:** match engine, transfers, news/social, training, UI (`public/app.html`, server), tests, remaining engines.
+
+Reply **continue GitHub push** to keep filling the repo.
+
+## When complete
 
 ```bash
+git clone https://github.com/Ewawere/football-career-sim.git
+cd football-career-sim
 npm install
-npm run play:web   # http://localhost:3847
-npm run play       # CLI career
+npm run play:web    # http://localhost:3847
+npm run play
 npm test
-npm run test:massive
 ```
 
-## Features
-
-- Full career systems: competitions, selection, training, development
-- Match engine with injuries, tactics, interactive highlights
-- Transfers, contracts, loans, need-driven club AI
-- News, social, fans, personality, agent, press
-- Youth academy, scouting, international, awards, manager career
-- Playable mobile web UI (Hub, Feed, Player, Table, Scout, Match)
-
-## Scripts
-
-| Command | Purpose |
-|---------|----------|
-| `npm run play:web` | Mobile web UI + API server |
-| `npm run play` | Interactive CLI career |
-| `npm test` | Unit/integration tests |
-| `npm run test:massive` | Multi-season structural validation |
-| `npm run demo:season` | Demo season simulation |
+On phone (same Wi‑Fi as your PC): `http://YOUR-PC-IP:3847`
 
 ## License
 
-UNLICENSED — original project, not affiliated with EA Sports FC.
+UNLICENSED — original project.
