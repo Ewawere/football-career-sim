@@ -6,8 +6,8 @@ import type { World } from "../world/world.js";
 import { processContractExpiries, processFreeAgentSignings } from "../contracts/lifecycle.js";
 import { pruneAllClubs, fillThinSquads, activeSquadCount, SQUAD_HARD_CAP } from "./squad-rules.js";
 import { analyzeSquadNeeds } from "./needs.js";
-import { estimateMarketValue, askingPrice } from "../contracts/valuation.js";
-import { nextId } from "../core/id.js";
+import { askingPrice } from "../contracts/valuation.js";
+import { processLoanWindow, processLoanReturns } from "./loans.js";
 import { Events } from "../core/events.js";
 
 export interface WindowReport {
@@ -25,6 +25,7 @@ export interface WindowReport {
   }[];
   freeAgents: number;
   expired: number;
+  loanReturns: number;
 }
 
 export function runTransferWindow(world: World): WindowReport {
@@ -33,19 +34,30 @@ export function runTransferWindow(world: World): WindowReport {
     loans: [],
     freeAgents: 0,
     expired: 0,
+    loanReturns: 0,
   };
 
+  report.loanReturns = processLoanReturns(world);
   report.expired = processContractExpiries(world);
   report.freeAgents = processFreeAgentSignings(world);
 
-  // Need-driven permanent moves (limited volume)
+  const loanDeals = processLoanWindow(world);
+  for (const d of loanDeals) {
+    report.loans.push({
+      playerId: d.playerId,
+      parentClubId: d.parentClubId,
+      loanClubId: d.loanClubId,
+      playingTimeExpectation: d.playingTimeExpectation,
+    });
+  }
+
   for (const buying of world.clubs.values()) {
     if (activeSquadCount(world, buying) >= SQUAD_HARD_CAP) continue;
     const needs = analyzeSquadNeeds(world, buying);
     const top = needs.prioritized.slice(0, 2);
     for (const need of top) {
       if (need.score < 35) continue;
-      if (world.rng.chance(0.55)) continue; // not every need filled every window
+      if (world.rng.chance(0.55)) continue;
 
       const candidates = [...world.players.values()]
         .filter(
@@ -70,7 +82,6 @@ export function runTransferWindow(world: World): WindowReport {
       if (buying.finances.transferBudget < fee * 0.9) continue;
       if (selling.reputation > buying.reputation + 15 && target.age <= 24) continue;
 
-      // Execute
       selling.squadPlayerIds = selling.squadPlayerIds.filter((id) => id !== target.id);
       if (target.contract) {
         selling.finances.currentWageBillWeekly = Math.max(
@@ -111,7 +122,7 @@ export function runTransferWindow(world: World): WindowReport {
         toClubId: buying.id,
         fee,
       });
-      break; // one signing per club per pass
+      break;
     }
   }
 
@@ -121,12 +132,18 @@ export function runTransferWindow(world: World): WindowReport {
 }
 
 export function formatWindowReport(world: World, report: WindowReport): string {
-  let out = `Transfer window: ${report.transfers.length} transfers, ${report.loans.length} loans, ${report.freeAgents} FA, ${report.expired} expired\n`;
+  let out = `Transfer window: ${report.transfers.length} transfers, ${report.loans.length} loans, ${report.freeAgents} FA, ${report.expired} expired, ${report.loanReturns} returns\n`;
   for (const t of report.transfers.slice(0, 20)) {
     const p = world.players.get(t.playerId);
     const to = world.clubs.get(t.toClubId)?.shortName ?? "?";
     const from = t.fromClubId ? world.clubs.get(t.fromClubId)?.shortName ?? "?" : "FA";
     out += `  ${p?.displayName ?? t.playerId}  ${from} → ${to}  €${(t.fee / 1e6).toFixed(2)}m\n`;
+  }
+  for (const l of report.loans.slice(0, 10)) {
+    const p = world.players.get(l.playerId);
+    const parent = world.clubs.get(l.parentClubId)?.shortName ?? "?";
+    const dest = world.clubs.get(l.loanClubId)?.shortName ?? "?";
+    out += `  LOAN ${p?.displayName ?? l.playerId}  ${parent} → ${dest} (${l.playingTimeExpectation})\n`;
   }
   return out;
 }
