@@ -1,5 +1,6 @@
 /**
  * Core Player entity.
+ * Pure data + derived helpers. No UI.
  */
 
 import type {
@@ -120,10 +121,12 @@ export function applyMatchRating(
   p.careerAppearances += 1;
   p.careerGoals += goals;
   p.careerAssists += assists;
+
   const n = p.state.ratingCount;
   p.state.averageRatingThisSeason =
     n === 0 ? rating : (p.state.averageRatingThisSeason * n + rating) / (n + 1);
   p.state.ratingCount = n + 1;
+
   const formDelta = (rating - 50) * 0.15;
   p.state.form = Math.max(0, Math.min(100, p.state.form + formDelta));
 }
