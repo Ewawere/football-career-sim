@@ -8,6 +8,7 @@ export type AwardType =
   | "GoldenBoot"
   | "Playmaker"
   | "PlayerOfTheSeason"
+  | "YoungPlayer"
   | "YoungPlayerOfTheSeason"
   | "GoalkeeperOfTheSeason"
   | "CleanSheetLeader"
@@ -31,6 +32,17 @@ export interface Award {
   date: GameDate;
   month: number | null;
   position: Position | null;
+}
+
+/** Lightweight award result used by awards engine */
+export interface AwardResult {
+  id: EntityId;
+  type: AwardType;
+  seasonId: string;
+  competitionId: EntityId | null;
+  playerId: EntityId;
+  value: number;
+  label: string;
 }
 
 export type RecordScope = "Club" | "League" | "Career" | "International";
