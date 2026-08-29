@@ -1,40 +1,36 @@
 /**
- * Match domain types.
+ * Match-related types (expanded for context, tactics, performance).
  */
 
 import type { EntityId, GameDate, Position } from "../core/types.js";
-import type { FormationId, TacticalRole } from "./tactics.js";
+import type { TacticalRole, FormationId } from "./tactics.js";
 
 export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled";
-
-export type MatchEventType =
-  | "Goal"
-  | "Assist"
-  | "Yellow"
-  | "Red"
-  | "Injury"
-  | "Sub"
-  | "PenaltyMiss"
-  | "PenaltyGoal"
-  | "OwnGoal"
-  | "Chance"
-  | "Save";
-
-export interface MatchEvent {
-  minute: number;
-  type: MatchEventType;
-  playerId?: EntityId;
-  assistId?: EntityId;
-  clubId?: EntityId;
-  description: string;
-}
 
 export interface MatchTeamLineup {
   clubId: EntityId;
   startingXI: EntityId[];
   substitutes: EntityId[];
-  formation: FormationId;
+  formation: FormationId | string;
   roles: Map<EntityId, TacticalRole>;
+}
+
+export interface MatchEvent {
+  minute: number;
+  type:
+    | "Goal"
+    | "Assist"
+    | "Yellow"
+    | "Red"
+    | "Injury"
+    | "Sub"
+    | "Chance"
+    | "Moment";
+  playerId: EntityId;
+  secondaryPlayerId?: EntityId;
+  clubId: EntityId;
+  description: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface PlayerMatchStats {
@@ -135,4 +131,5 @@ export interface InteractiveMomentRecord {
   description: string;
   chosenActionId: string;
   outcome: string;
+  success: boolean;
 }
