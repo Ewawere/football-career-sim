@@ -6,30 +6,39 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { readFileSync, existsSync } from "fs";
 import { join, extname } from "path";
-import { createWorld } from "../world/world.js";
-import { bootstrapWorld } from "../world/bootstrap.js";
-import { createCareerPlayer } from "../career/player-career.js";
-import { describeUserStanding } from "../career/selection.js";
 import {
-  startSeason,
-  playMatchday,
-  playFullSeason,
-  endSeasonProcessing,
-  beginNextSeason,
-  printLeagueTable,
-} from "../competitions/season.js";
-import { applyTrainingSession } from "../training/development.js";
-import { saveToJson, loadFromJson } from "../save/serialize.js";
-import { runTransferWindow, formatWindowReport } from "../transfers/window.js";
-import type { World } from "../world/world.js";
+  createSession,
+  startPlayerCareer,
+  getHub,
+  advanceMatchday,
+  endSeason,
+  nextSeason,
+  doTrain,
+  getAgentAdvice,
+  getPress,
+  answerPress,
+  getIntlStatus,
+  getNextUserFixture,
+  beginPlayableMatch,
+  chooseHighlightAction,
+  skipToFullTime,
+  getPostMatchReport,
+  save,
+  type GameSession,
+  listMarketPlayers,
+  getSquadWithValues,
+  getLatestUserMatchStats,
+  getMatchStatsView,
+  getClubSocialView,
+} from "./api.js";
+import { getNewsFeed } from "../news/engine.js";
+import { getSocialFeed } from "../social/engine.js";
+import { getFanSentiment } from "../social/fans.js";
+import { generateTargets } from "../transfers/market.js";
+import { estimateMarketValue, formatMarketValue } from "../contracts/valuation.js";
 
-interface Session {
-  world: World;
-  competitionId: string | null;
-}
-
-let session: Session = { world: createWorld({ seed: Date.now() % 100000 }), competitionId: null };
-bootstrapWorld(session.world);
+let session: GameSession = createSession(Date.now() % 100000);
+let careerStarted = false;
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
@@ -53,145 +62,310 @@ function readBody(req: IncomingMessage): Promise<any> {
   });
 }
 
-function hubPayload() {
+function feedPayload() {
+  const w = session.world;
+  const news = getNewsFeed(w)
+    .slice(-40)
+    .reverse()
+    .map((n) => ({
+      id: n.id,
+      headline: n.headline,
+      body: n.body,
+      importance: n.importance,
+      category: n.category,
+      date: n.timestamp,
+      sentiment: n.sentiment,
+      tags: n.tags,
+      players: n.relatedPlayerIds,
+      clubs: n.relatedClubIds,
+    }));
+  const social = getSocialFeed(w)
+    .slice(-30)
+    .reverse()
+    .map((s) => ({
+      author: s.authorLabel,
+      content: s.content,
+      engagement: s.engagement,
+      sentiment: s.sentiment,
+    }));
+  return { news, social };
+}
+
+function scoutPayload() {
   const w = session.world;
   const user = w.userPlayerId ? w.players.get(w.userPlayerId) : null;
   const club = user?.currentClubId ? w.clubs.get(user.currentClubId) : null;
-  const table = [...w.leagueTables.values()][0] ?? [];
-  const news = ((w as any).newsFeed as any[]) ?? [];
+  if (!club) return { targets: [] };
+  const targets = generateTargets(w, club, 12).map((t) => {
+    const p = w.players.get(t.playerId)!;
+    const from = p.currentClubId ? w.clubs.get(p.currentClubId)?.name : "Free agent";
+    const noise = (v: number) => {
+      const lo = Math.max(1, v - 6 - Math.floor(Math.random() * 4));
+      const hi = Math.min(99, v + 4 + Math.floor(Math.random() * 6));
+      return [lo, hi];
+    };
+    return {
+      id: p.id,
+      name: p.displayName,
+      age: p.age,
+      position: p.primaryPosition,
+      ovr: p.ovr,
+      potential: p.potential,
+      club: from,
+      fee: t.estimatedFee,
+      marketValue: estimateMarketValue(w, p),
+      marketValueLabel: formatMarketValue(estimateMarketValue(w, p)),
+      fit: t.score,
+      reason: `${t.position} need (${t.needLevel})`,
+      ranges: {
+        pace: noise(p.attributes.physical.pace),
+        shooting: noise(p.attributes.technical.finishing),
+        passing: noise(p.attributes.technical.passing),
+        dribbling: noise(p.attributes.technical.dribbling),
+        defending: noise(p.attributes.technical.tackling),
+        physical: noise(p.attributes.physical.strength),
+      },
+      reportPct: 15 + Math.floor(Math.random() * 55),
+    };
+  });
+  return { targets };
+}
+
+function playerDevPayload() {
+  const w = session.world;
+  const id = w.userPlayerId;
+  if (!id) return null;
+  const p = w.players.get(id)!;
+  const a = p.attributes;
   return {
-    date: w.calendar.currentDate,
-    season: w.calendar.currentSeason,
-    player: user
-      ? {
-          id: user.id,
-          name: user.displayName,
-          age: user.age,
-          ovr: user.ovr,
-          pot: user.potential,
-          position: user.primaryPosition,
-          club: club?.name ?? null,
-          form: Math.round(user.state.form),
-          fitness: user.state.fitness,
-          trust: Math.round(user.state.managerTrust),
-          apps: user.state.appearancesThisSeason,
-          goals: user.state.goalsThisSeason,
-          standing: describeUserStanding(w),
-        }
-      : null,
-    table: table.slice(0, 20).map((r) => ({
-      pos: r.position,
-      club: w.clubs.get(r.clubId)?.shortName ?? r.clubId,
-      pts: r.points,
-      gd: r.goalDifference,
-    })),
-    news: news.slice(-15).reverse(),
+    id: p.id,
+    name: p.displayName,
+    age: p.age,
+    position: p.primaryPosition,
+    ovr: p.ovr,
+    potential: p.potential,
+    foot: p.preferredFoot,
+    club: p.currentClubId ? w.clubs.get(p.currentClubId)?.name : "Free agent",
+    form: Math.round(p.state.form),
+    fitness: Math.round(p.state.fitness),
+    morale: Math.round(p.state.morale),
+    trust: Math.round(p.state.managerTrust),
+    reputation: Math.round(p.reputation),
+    apps: p.state.appearancesThisSeason,
+    goals: p.state.goalsThisSeason,
+    assists: p.state.assistsThisSeason,
+    careerApps: p.careerAppearances,
+    careerGoals: p.careerGoals,
+    groups: {
+      pace: Math.round((a.physical.pace + a.physical.acceleration) / 2),
+      shooting: Math.round((a.technical.finishing + a.technical.longShots) / 2),
+      passing: Math.round((a.technical.passing + a.mental.vision) / 2),
+      dribbling: Math.round((a.technical.dribbling + a.technical.ballControl) / 2),
+      defending: Math.round((a.technical.tackling + a.technical.marking) / 2),
+      physical: Math.round((a.physical.strength + a.physical.stamina) / 2),
+    },
+    detail: {
+      sprintSpeed: a.physical.pace,
+      acceleration: a.physical.acceleration,
+      finishing: a.technical.finishing,
+      longShots: a.technical.longShots,
+      vision: a.mental.vision,
+      crossing: a.technical.crossing,
+      shortPass: a.technical.passing,
+      heading: a.technical.heading,
+      agility: a.physical.agility,
+      balance: a.physical.balance,
+      reactions: a.mental.reactions,
+      ballControl: a.technical.ballControl,
+      dribbling: a.technical.dribbling,
+      marking: a.technical.marking,
+      standingTackle: a.technical.tackling,
+      jumping: a.physical.jumping,
+      stamina: a.physical.stamina,
+      strength: a.physical.strength,
+      aggression: a.mental.aggression,
+      composure: a.mental.composure,
+      positioning: a.mental.positioning,
+      decisions: a.mental.decisions,
+    },
+    plans: ["Balanced", "Attacking", "Defending", "Physical", "Tactical"],
   };
+}
+
+async function handleApi(req: IncomingMessage, res: ServerResponse, path: string) {
+  const method = req.method ?? "GET";
+
+  if (path === "/api/status") {
+    return json(res, 200, {
+      careerStarted,
+      mode: session.mode,
+      date: session.world.calendar.currentDate,
+      season: session.world.calendar.currentSeason,
+    });
+  }
+
+  if ((path === "/api/start" || path === "/api/career/start") && method === "POST") {
+    const body = await readBody(req);
+    const result = startPlayerCareer(session, {
+      firstName: body.firstName || "Jordan",
+      lastName: body.lastName || "Vale",
+      position: body.position || "RW",
+      age: Number(body.age) || 17,
+      potential: Number(body.potential) || 85,
+      nationality: body.nationality || "England",
+      preferredFoot: body.preferredFoot === "Left" || body.preferredFoot === "Both" ? body.preferredFoot : "Right",
+      physicalProfile: ["Slight", "Average", "Athletic", "Powerful", "Tall"].includes(body.physicalProfile)
+        ? body.physicalProfile
+        : "Athletic",
+      heightCm: body.heightCm ? Number(body.heightCm) : undefined,
+    });
+    careerStarted = true;
+    return json(res, 200, result);
+  }
+
+  if (!careerStarted && path !== "/api/start" && path !== "/api/career/start" && path !== "/api/status") {
+    return json(res, 400, { error: "Start a career first" });
+  }
+
+  if (path === "/api/hub") return json(res, 200, getHub(session));
+  if (path === "/api/match/stats") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const mid = url.searchParams.get("matchId");
+    if (mid) return json(res, 200, getMatchStatsView(session, mid) ?? { error: "not found" });
+    return json(res, 200, getLatestUserMatchStats(session) ?? { error: "no match yet" });
+  }
+  if (path === "/api/club/social") {
+    const url = new URL(req.url || "/", "http://localhost");
+    return json(res, 200, getClubSocialView(session, url.searchParams.get("clubId") || undefined) ?? { error: "no club" });
+  }
+  if (path === "/api/market") {
+    const url = new URL(req.url || "/", "http://localhost");
+    const clubId = url.searchParams.get("clubId") || undefined;
+    const limit = Number(url.searchParams.get("limit") || 300);
+    return json(res, 200, { players: listMarketPlayers(session, { clubId, limit }) });
+  }
+  if (path === "/api/squad") return json(res, 200, getSquadWithValues(session));
+  if (path === "/api/feed") return json(res, 200, feedPayload());
+  if (path === "/api/player") return json(res, 200, playerDevPayload());
+  if (path === "/api/scout") return json(res, 200, scoutPayload());
+  if (path === "/api/fixture") return json(res, 200, getNextUserFixture(session));
+  if (path === "/api/agent") return json(res, 200, { advice: getAgentAdvice(session) });
+  if (path === "/api/intl") return json(res, 200, getIntlStatus(session));
+
+  if (path === "/api/advance" && method === "POST") {
+    try {
+      return json(res, 200, advanceMatchday(session));
+    } catch (e: any) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  if (path === "/api/train" && method === "POST") {
+    const body = await readBody(req);
+    const focus = body.focus || "Tactical";
+    return json(res, 200, doTrain(session, focus));
+  }
+
+  if (path === "/api/match/start" && method === "POST") {
+    try {
+      const state = beginPlayableMatch(session);
+      return json(res, 200, state);
+    } catch (e: any) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  if (path === "/api/match/action" && method === "POST") {
+    const body = await readBody(req);
+    try {
+      return json(res, 200, chooseHighlightAction(session, body.actionId));
+    } catch (e: any) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  if (path === "/api/match/finish" && method === "POST") {
+    try {
+      const state = skipToFullTime(session);
+      const report = getPostMatchReport(session);
+      return json(res, 200, { state, report });
+    } catch (e: any) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  if (path === "/api/season/end" && method === "POST") {
+    while (true) {
+      const r = advanceMatchday(session);
+      if (r.done) break;
+    }
+    const end = endSeason(session);
+    return json(res, 200, end);
+  }
+
+  if (path === "/api/season/next" && method === "POST") {
+    return json(res, 200, nextSeason(session));
+  }
+
+  if (path === "/api/save" && method === "POST") {
+    const pathSaved = save(session, "web-career");
+    return json(res, 200, { path: pathSaved });
+  }
+
+  if (path === "/api/press") {
+    return json(res, 200, { questions: getPress(session) });
+  }
+
+  if (path === "/api/press/answer" && method === "POST") {
+    const body = await readBody(req);
+    try {
+      return json(res, 200, answerPress(session, body.questionId, body.responseId));
+    } catch (e: any) {
+      return json(res, 400, { error: e.message });
+    }
+  }
+
+  json(res, 404, { error: "Not found" });
 }
 
 const MIME: Record<string, string> = {
   ".html": "text/html",
-  ".js": "text/javascript",
   ".css": "text/css",
+  ".js": "application/javascript",
   ".json": "application/json",
   ".png": "image/png",
   ".svg": "image/svg+xml",
 };
 
+const PORT = Number(process.env.PORT || 3847);
+const publicDir = join(process.cwd(), "public");
+
 const server = createServer(async (req, res) => {
-  const url = req.url ?? "/";
+  const url = new URL(req.url || "/", `http://localhost:${PORT}`);
+  const path = url.pathname;
 
-  if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    });
-    res.end();
+  if (path.startsWith("/api/")) {
+    try {
+      await handleApi(req, res, path);
+    } catch (e: any) {
+      json(res, 500, { error: e.message || String(e) });
+    }
     return;
   }
 
-  if (url === "/api/hub") return json(res, 200, hubPayload());
-
-  if (url === "/api/start" && req.method === "POST") {
-    const body = await readBody(req);
-    const placement = createCareerPlayer(session.world, {
-      firstName: body.firstName ?? "Jordan",
-      lastName: body.lastName ?? "Vale",
-      position: body.position ?? "RW",
-      preferredFoot: body.preferredFoot ?? "Left",
-      nationality: body.nationality ?? "England",
-      age: body.age ?? 17,
-      potential: body.potential ?? 85,
-    });
-    const comp = startSeason(session.world);
-    session.competitionId = comp.id;
-    return json(res, 200, { ok: true, placement: placement.reason, hub: hubPayload() });
-  }
-
-  if (url === "/api/matchday" && req.method === "POST") {
-    if (!session.competitionId) {
-      const comp = startSeason(session.world);
-      session.competitionId = comp.id;
-    }
-    const comp = session.world.competitions.get(session.competitionId)!;
-    const next = Math.min(comp.matchdayCount, (comp.currentMatchday || 0) + 1);
-    playMatchday(session.world, session.competitionId, next);
-    return json(res, 200, hubPayload());
-  }
-
-  if (url === "/api/train" && req.method === "POST") {
-    const body = await readBody(req);
-    const user = session.world.userPlayerId
-      ? session.world.players.get(session.world.userPlayerId)
-      : null;
-    if (user) applyTrainingSession(user, body.focus ?? "Technical", body.intensity ?? 70, session.world);
-    return json(res, 200, hubPayload());
-  }
-
-  if (url === "/api/end-season" && req.method === "POST") {
-    if (session.competitionId) {
-      playFullSeason(session.world, session.competitionId);
-      endSeasonProcessing(session.world);
-    }
-    return json(res, 200, hubPayload());
-  }
-
-  if (url === "/api/next-season" && req.method === "POST") {
-    const report = runTransferWindow(session.world);
-    const comp = beginNextSeason(session.world);
-    session.competitionId = comp.id;
-    return json(res, 200, { hub: hubPayload(), transfers: formatWindowReport(session.world, report) });
-  }
-
-  if (url === "/api/save") {
-    return json(res, 200, { save: saveToJson(session.world) });
-  }
-
-  if (url === "/api/load" && req.method === "POST") {
-    const body = await readBody(req);
-    if (body.save) {
-      session.world = loadFromJson(body.save);
-      session.competitionId = [...session.world.competitions.keys()][0] ?? null;
-    }
-    return json(res, 200, hubPayload());
-  }
-
-  // Static files from public/
-  let path = url === "/" ? "/index.html" : url.split("?")[0]!;
-  if (path === "/app.html") path = "/index.html";
-  const file = join(process.cwd(), "public", path);
-  if (existsSync(file) && !path.includes("..")) {
-    const ext = extname(file);
-    res.writeHead(200, { "Content-Type": MIME[ext] ?? "text/plain" });
-    res.end(readFileSync(file));
+  let filePath = path === "/" ? join(publicDir, "app.html") : join(publicDir, path);
+  if (!existsSync(filePath)) {
+    res.writeHead(404);
+    res.end("Not found");
     return;
   }
-
-  json(res, 404, { error: "not found" });
+  const ext = extname(filePath);
+  res.writeHead(200, { "Content-Type": MIME[ext] || "text/plain" });
+  res.end(readFileSync(filePath));
 });
 
-const PORT = Number(process.env.PORT ?? 3847);
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Football Career Sim UI → http://localhost:${PORT}`);
+  console.log(`\n⚽  Football Career — playable UI`);
+  console.log(`    http://0.0.0.0:${PORT}`);
+  console.log(`    http://localhost:${PORT}\n`);
 });
