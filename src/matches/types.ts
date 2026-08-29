@@ -1,47 +1,40 @@
 /**
- * Match-related types.
+ * Match domain types.
  */
 
-import type { EntityId, GameDate } from "../core/types.js";
+import type { EntityId, GameDate, Position } from "../core/types.js";
+import type { FormationId, TacticalRole } from "./tactics.js";
 
 export type MatchStatus = "Scheduled" | "InProgress" | "Finished" | "Cancelled";
-export type MomentType =
-  | "OneVOne"
-  | "ShotOpportunity"
-  | "Penalty"
-  | "CounterAttack"
-  | "ThroughBall"
-  | "Header"
-  | "Cross"
-  | "FreeKick"
-  | "Tackle"
-  | "Press"
-  | "Interception"
-  | "DefensiveRecovery"
-  | "RiskyPass"
-  | "ShortPass"
-  | "Save"
-  | "ClaimCross";
 
-export type TacticalRole = string;
-export type FormationId = string;
+export type MatchEventType =
+  | "Goal"
+  | "Assist"
+  | "Yellow"
+  | "Red"
+  | "Injury"
+  | "Sub"
+  | "PenaltyMiss"
+  | "PenaltyGoal"
+  | "OwnGoal"
+  | "Chance"
+  | "Save";
+
+export interface MatchEvent {
+  minute: number;
+  type: MatchEventType;
+  playerId?: EntityId;
+  assistId?: EntityId;
+  clubId?: EntityId;
+  description: string;
+}
 
 export interface MatchTeamLineup {
   clubId: EntityId;
   startingXI: EntityId[];
-  bench: EntityId[];
-  formation: FormationId | string;
+  substitutes: EntityId[];
+  formation: FormationId;
   roles: Map<EntityId, TacticalRole>;
-}
-
-export interface MatchEvent {
-  minute: number;
-  type: "Goal" | "Assist" | "Yellow" | "Red" | "Injury" | "Sub" | "Chance" | "Moment";
-  playerId: EntityId;
-  secondaryPlayerId?: EntityId;
-  clubId: EntityId;
-  description: string;
-  meta?: Record<string, unknown>;
 }
 
 export interface PlayerMatchStats {
@@ -66,6 +59,23 @@ export interface PlayerMatchStats {
   role?: TacticalRole;
 }
 
+export interface TeamMatchStats {
+  possession: number;
+  xG: number;
+  shots: number;
+  shotsOnTarget: number;
+  touchesInBox: number;
+  bigChances: number;
+  bigChancesMissed: number;
+  accuratePasses: number;
+  passAccuracy: number;
+  fouls: number;
+  offsides: number;
+  corners: number;
+  yellowCards: number;
+  redCards: number;
+}
+
 export interface MatchContext {
   minute: number;
   homeScore: number;
@@ -76,15 +86,6 @@ export interface MatchContext {
   shotsAway: number;
   matchImportance: number;
   intensity: number;
-}
-
-export interface InteractiveMomentRecord {
-  minute: number;
-  momentType: string;
-  description: string;
-  chosenActionId: string;
-  outcome: string;
-  success: boolean;
 }
 
 export interface Match {
@@ -101,7 +102,20 @@ export interface Match {
   momentum: number;
   possessionHome: number;
   context: MatchContext;
+  homeStats: TeamMatchStats;
+  awayStats: TeamMatchStats;
   interactiveMoments: InteractiveMomentRecord[];
+}
+
+export interface MatchResultSummary {
+  matchId: EntityId;
+  homeClubId: EntityId;
+  awayClubId: EntityId;
+  homeScore: number;
+  awayScore: number;
+  events: MatchEvent[];
+  ratings: Map<EntityId, number>;
+  careerEffects?: CareerMatchEffects;
 }
 
 export interface CareerMatchEffects {
@@ -115,13 +129,10 @@ export interface CareerMatchEffects {
   notes: string[];
 }
 
-export interface MatchResultSummary {
-  matchId: EntityId;
-  homeClubId: EntityId;
-  awayClubId: EntityId;
-  homeScore: number;
-  awayScore: number;
-  events: MatchEvent[];
-  ratings: Map<EntityId, number>;
-  careerEffects?: CareerMatchEffects;
+export interface InteractiveMomentRecord {
+  minute: number;
+  momentType: string;
+  description: string;
+  chosenActionId: string;
+  outcome: string;
 }
