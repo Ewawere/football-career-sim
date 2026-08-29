@@ -12,6 +12,7 @@ export type AwardType =
   | "GoalkeeperOfTheSeason"
   | "CleanSheetLeader"
   | "TeamOfTheSeason"
+  | "TeamOfTheWeek"
   | "PlayerOfTheMonth"
   | "ManagerOfTheMonth"
   | "ManagerOfTheSeason"
