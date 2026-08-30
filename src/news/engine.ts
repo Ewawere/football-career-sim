@@ -37,11 +37,6 @@ function feeStr(fee: number): string {
   return `€${Math.round(fee / 1000)}k`;
 }
 
-function playerName(world: World, id: EntityId | undefined): string {
-  if (!id) return "A player";
-  return world.players.get(id)?.displayName ?? "A player";
-}
-
 function clubName(world: World, id: EntityId | undefined | null): string {
   if (!id) return "a club";
   return world.clubs.get(id)?.name ?? "a club";
@@ -497,10 +492,6 @@ export function publishRumour(
   const club = world.clubs.get(buyingClubId);
   if (!player || !club) return null;
 
-  const trueRumour = world.rng.chance(reliability / 100);
-  if (!trueRumour && world.rng.chance(0.5)) {
-  }
-
   const outlet =
     MEDIA_OUTLETS.find((o) => o.transferReliability >= reliability - 10) ??
     MEDIA_OUTLETS.find((o) => o.id === "pitchwire")!;
@@ -594,7 +585,6 @@ export function onTransferOfferRejected(
 
 export function attachNewsEngine(world: World): void {
   world.events.on(Events.MATCH_FINISHED, (p) => onMatchFinished(world, p as any));
-
   world.events.on(Events.TRANSFER_COMPLETED, (p) => onTransferCompleted(world, p as any));
   world.events.on(Events.TRANSFER_OFFER, (p) => {
     const payload = p as any;
@@ -613,7 +603,7 @@ export function attachNewsEngine(world: World): void {
         category: "Club",
         importance: "Major",
         headline: `${p.clubName} dismiss ${p.name}`,
-        body: `${p.name} has left ${p.clubName} after a difficult period.`,
+        body: `${p.name} has been sacked by ${p.clubName} after a difficult run. The board lost patience with results and have begun the search for a replacement.`,
         sourceId: "gfn",
         relatedPlayerIds: [],
         relatedClubIds: p.clubId ? [p.clubId] : [],
@@ -622,6 +612,55 @@ export function attachNewsEngine(world: World): void {
         sentiment: "Negative",
         tags: ["manager", "sacked"],
         storyKey: `sack:${p.managerId}:${p.clubId}`,
+      });
+      return;
+    }
+    if (p.type === "player_ousted") {
+      const severity = p.severity ?? "listed";
+      const headline =
+        severity === "forced"
+          ? `${p.clubName} push ${p.name} toward the exit`
+          : severity === "loan"
+            ? `${p.name} available for loan from ${p.clubName}`
+            : `${p.name} placed on transfer list by ${p.clubName}`;
+      const body =
+        severity === "forced"
+          ? `${p.name} has fallen well short of expectations at ${p.clubName}. The club is actively looking to move the player on.`
+          : severity === "loan"
+            ? `With limited minutes and mixed form, ${p.clubName} are open to loan offers for ${p.name}.`
+            : `${p.name} has been made available for transfer after a sustained dip in form and selection.`;
+      publish(world, {
+        timestamp: world.calendar.currentDate,
+        category: "Transfer",
+        importance: severity === "forced" ? "Important" : "Normal",
+        headline,
+        body,
+        sourceId: "cinsider",
+        relatedPlayerIds: p.playerId ? [p.playerId] : [],
+        relatedClubIds: p.clubId ? [p.clubId] : [],
+        relatedCompetitionId: null,
+        sourceEventId: `oust:${p.playerId}:${severity}:${world.calendar.currentDate}`,
+        sentiment: "Negative",
+        tags: ["transfer", "listed", severity],
+        storyKey: `oust:${p.playerId}:${world.calendar.currentSeason}`,
+      });
+      return;
+    }
+    if (p.type === "player_restored") {
+      publish(world, {
+        timestamp: world.calendar.currentDate,
+        category: "Player",
+        importance: "Minor",
+        headline: `${p.name} back in favour at ${p.clubName}`,
+        body: `${p.name} has responded to recent criticism and is no longer on the transfer list.`,
+        sourceId: "cinsider",
+        relatedPlayerIds: p.playerId ? [p.playerId] : [],
+        relatedClubIds: p.clubId ? [p.clubId] : [],
+        relatedCompetitionId: null,
+        sourceEventId: `restore:${p.playerId}:${world.calendar.currentDate}`,
+        sentiment: "Positive",
+        tags: ["squad"],
+        storyKey: `restore:${p.playerId}:${world.calendar.currentSeason}`,
       });
       return;
     }
@@ -652,6 +691,7 @@ export function attachNewsEngine(world: World): void {
         GoalkeeperOfTheSeason: "Goalkeeper of the Season",
         CleanSheetLeader: "Clean Sheet Award",
         TeamOfTheSeason: "Team of the Season",
+        TeamOfTheWeek: "Team of the Week",
         PlayerOfTheMonth: "Player of the Month",
         ManagerOfTheMonth: "Manager of the Month",
         ManagerOfTheSeason: "Manager of the Season",
@@ -663,16 +703,23 @@ export function attachNewsEngine(world: World): void {
         const player = world.players.get(p.playerId);
         if (!player) return;
         const posBit = p.position ? ` (${p.position})` : "";
-        const monthBit = p.month ? ` — Month ${p.month}` : "";
+        const monthBit =
+          p.awardType === "TeamOfTheWeek" && p.month
+            ? ` — MD${p.month}`
+            : p.month
+              ? ` — Month ${p.month}`
+              : "";
         publish(world, {
           timestamp: world.calendar.currentDate,
           category: "Player",
           importance:
             p.awardType === "PlayerOfTheSeason" || p.awardType === "InternationalPlayerOfTheYear"
               ? "Major"
-              : p.awardType === "PlayerOfTheMonth"
+              : p.awardType === "TeamOfTheWeek"
                 ? "Normal"
-                : "Important",
+                : p.awardType === "PlayerOfTheMonth"
+                  ? "Normal"
+                  : "Important",
           headline: `${player.displayName} wins ${label}${posBit}${monthBit}`,
           body: `${player.displayName} has been named ${label}${posBit}.`,
           sourceId: "gfn",
