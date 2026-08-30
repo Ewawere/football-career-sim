@@ -25,29 +25,33 @@ function store(world: World): NarrativeThread[] {
 
 function sentimentDelta(s: ThreadBeat["sentiment"]): number {
   switch (s) {
-    case "VeryPositive": return 18;
-    case "Positive": return 8;
-    case "Neutral": return 0;
-    case "Negative": return -8;
-    case "VeryNegative": return -18;
+    case "VeryPositive":
+      return 18;
+    case "Positive":
+      return 8;
+    case "Neutral":
+      return 0;
+    case "Negative":
+      return -8;
+    case "VeryNegative":
+      return -18;
   }
 }
 
 function findActive(
   world: World,
   kind: ThreadKind,
-  playerId: EntityId | null
+  playerId?: EntityId | null
 ): NarrativeThread | undefined {
   return store(world).find(
     (t) =>
       t.status === "active" &&
       t.kind === kind &&
-      (!playerId || t.playerId === playerId || t.beats.length > 0) &&
-      (playerId == null || t.playerId === playerId)
+      (!playerId || t.playerId === playerId || t.beats.length > 0)
   );
 }
 
-export function openThread(
+function openThread(
   world: World,
   opts: {
     kind: ThreadKind;
@@ -58,6 +62,8 @@ export function openThread(
     beat: ThreadBeat;
   }
 ): NarrativeThread {
+  const seasonId =
+    world.season?.seasonId ?? world.calendar.currentSeason ?? "unknown";
   const thread: NarrativeThread = {
     id: nextId("nth"),
     kind: opts.kind,
@@ -65,7 +71,7 @@ export function openThread(
     title: opts.title,
     playerId: opts.playerId,
     clubIds: opts.clubIds,
-    seasonId: world.calendar.currentSeason,
+    seasonId,
     openedDate: world.calendar.currentDate,
     updatedDate: world.calendar.currentDate,
     resolvedDate: null,
@@ -77,7 +83,7 @@ export function openThread(
   return thread;
 }
 
-export function appendBeat(
+function appendBeat(
   thread: NarrativeThread,
   beat: ThreadBeat,
   world: World
@@ -96,21 +102,21 @@ export function appendBeat(
   );
 }
 
-export function resolveThread(
+function resolveThread(
   thread: NarrativeThread,
   world: World,
-  summary?: string
+  closingSummary?: string
 ): void {
   if (thread.status !== "active") return;
   thread.status = "resolved";
   thread.resolvedDate = world.calendar.currentDate;
   thread.updatedDate = world.calendar.currentDate;
-  if (summary) {
+  if (closingSummary) {
     appendBeat(
       thread,
       {
         date: world.calendar.currentDate,
-        summary,
+        summary: closingSummary,
         sourceEventId: `resolve:${thread.id}`,
         sentiment: "Neutral",
       },
@@ -124,16 +130,12 @@ export function fadeStaleThreads(world: World): number {
   for (const t of store(world)) {
     if (t.status !== "active") continue;
     if (t.beats.length < 2) {
-      const age = world.calendar.currentDate > t.updatedDate;
-      if (age && t.updatedDate < world.calendar.currentDate) {
-        // keep short quiet threads for a while
+      const opened = t.openedDate;
+      if (opened < world.calendar.currentDate.slice(0, 7)) {
+        t.status = "faded";
+        t.updatedDate = world.calendar.currentDate;
+        n++;
       }
-    }
-    // Soft fade: if season changed and no recent beats
-    if (t.seasonId !== world.calendar.currentSeason && t.beats.length >= 1) {
-      t.status = "faded";
-      t.updatedDate = world.calendar.currentDate;
-      n++;
     }
   }
   return n;
@@ -144,6 +146,8 @@ function onTransferCompleted(world: World, payload: any): void {
   if (!playerId) return;
   const player = world.players.get(playerId);
   if (!player) return;
+  const toClub = payload.toClubId ? world.clubs.get(payload.toClubId) : null;
+  const fromClub = payload.fromClubId ? world.clubs.get(payload.fromClubId) : null;
   let t = findActive(world, "transfer_saga", playerId);
   if (!t) {
     openThread(world, {
@@ -154,8 +158,8 @@ function onTransferCompleted(world: World, payload: any): void {
       tags: ["transfer"],
       beat: {
         date: world.calendar.currentDate,
-        summary: `${player.displayName} completes move.`,
-        sourceEventId: `transfer:${payload.transferId ?? playerId}`,
+        summary: `${player.displayName} completes move${toClub ? ` to ${toClub.name}` : ""}.`,
+        sourceEventId: `tx:${payload.transferId ?? playerId}:${world.calendar.currentDate}`,
         sentiment: "Positive",
       },
     });
@@ -164,13 +168,14 @@ function onTransferCompleted(world: World, payload: any): void {
       t,
       {
         date: world.calendar.currentDate,
-        summary: `Transfer completed.`,
-        sourceEventId: `transfer:${payload.transferId ?? playerId}`,
+        summary: `Deal done${toClub ? ` — ${toClub.name}` : ""}.`,
+        sourceEventId: `tx:${payload.transferId ?? playerId}:${world.calendar.currentDate}`,
         sentiment: "Positive",
       },
       world
     );
     if (t.beats.length === 1) resolveThread(t, world);
+    else resolveThread(t, world, "Transfer completed.");
   }
 }
 
@@ -183,13 +188,13 @@ function onTransferOffer(world: World, payload: any): void {
   if (!t) {
     openThread(world, {
       kind: "transfer_saga",
-      title: `${player.displayName} transfer speculation",
+      title: `${player.displayName} transfer saga",
       playerId,
-      clubIds: payload.clubId ? [payload.clubId] : [],
+      clubIds: [payload.fromClubId, payload.toClubId].filter(Boolean),
       tags: ["transfer", "rumour"],
       beat: {
         date: world.calendar.currentDate,
-        summary: `Interest reported in ${player.displayName}.`,
+        summary: `Offer lodged for ${player.displayName}.`,
         sourceEventId: `offer:${payload.offerId ?? playerId}:${world.calendar.currentDate}`,
         sentiment: "Neutral",
       },
@@ -199,7 +204,7 @@ function onTransferOffer(world: World, payload: any): void {
       t,
       {
         date: world.calendar.currentDate,
-        summary: `Fresh interest in ${player.displayName}.`,
+        summary: `Fresh offer activity around ${player.displayName}.`,
         sourceEventId: `offer:${payload.offerId ?? playerId}:${world.calendar.currentDate}`,
         sentiment: "Neutral",
       },
@@ -217,21 +222,21 @@ function onMatchFinished(world: World, payload: any): void {
   if (!userId) return;
   const stats = match.playerStats.get(userId);
   if (!stats || stats.minutes < 1) return;
-  const rating = (stats.rating ?? 55) / 10;
-  if (rating < 5.8) {
+  const rating = stats.rating / 10;
+  const player = world.players.get(userId)!;
+
+  if (rating < 5.8 && stats.minutes >= 45) {
     let crisis = findActive(world, "form_crisis", userId);
     if (!crisis) {
       openThread(world, {
         kind: "form_crisis",
-        title: "Form under scrutiny",
+        title: `${player.displayName} under scrutiny",
         playerId: userId,
-        clubIds: world.players.get(userId)?.currentClubId
-          ? [world.players.get(userId)!.currentClubId!]
-          : [],
+        clubIds: player.currentClubId ? [player.currentClubId] : [],
         tags: ["form"],
         beat: {
           date: match.date,
-          summary: `Poor showing (${rating.toFixed(1)}) raises questions.`,
+          summary: `Poor display (${rating.toFixed(1)}) — pressure builds.`,
           sourceEventId: `crisis:${match.id}:${userId}`,
           sentiment: "Negative",
         },
@@ -241,7 +246,7 @@ function onMatchFinished(world: World, payload: any): void {
         crisis,
         {
           date: match.date,
-          summary: `Another difficult night (${rating.toFixed(1)}).`,
+          summary: `Another below-par rating (${rating.toFixed(1)}).`,
           sourceEventId: `crisis:${match.id}:${userId}`,
           sentiment: "Negative",
         },
@@ -277,7 +282,7 @@ function onInjury(world: World, payload: any): void {
   if (!t) {
     openThread(world, {
       kind: "injury_comeback",
-      title: `${player.displayName} injury battle`,
+      title: `${player.displayName} injury battle",
       playerId,
       clubIds: player.currentClubId ? [player.currentClubId] : [],
       tags: ["injury"],
@@ -306,7 +311,7 @@ function onNewsGenerated(world: World, payload: any): void {
   if (payload?.type === "manager_sacked") {
     openThread(world, {
       kind: "manager_pressure",
-      title: `${payload.clubName ?? "Club"} managerial change`,
+      title: `${payload.clubName ?? "Club"} managerial change",
       playerId: null,
       clubIds: payload.clubId ? [payload.clubId] : [],
       tags: ["manager", "sacked"],
@@ -320,12 +325,11 @@ function onNewsGenerated(world: World, payload: any): void {
   }
 
   if (payload?.type === "manager_hired") {
-    const threads = store(world);
+    const threads = ((world as any).narrativeThreads ?? []) as NarrativeThread[];
     const open = threads.find(
       (t) =>
         t.status === "active" &&
         t.kind === "manager_pressure" &&
-        payload.clubId &&
         t.clubIds.includes(payload.clubId)
     );
     if (open) {
@@ -345,19 +349,21 @@ function onNewsGenerated(world: World, payload: any): void {
 
   if (payload?.type === "player_ousted" && payload.playerId) {
     const player = world.players.get(payload.playerId);
-    openThread(world, {
-      kind: "form_crisis",
-      title: `${payload.name ?? player?.displayName ?? "Player"} on the brink`,
-      playerId: payload.playerId,
-      clubIds: payload.clubId ? [payload.clubId] : [],
-      tags: ["oust", payload.severity ?? "listed"],
-      beat: {
-        date: world.calendar.currentDate,
-        summary: `${payload.name} faces exit pressure (${payload.severity ?? "listed"}).`,
-        sourceEventId: `oust:${payload.playerId}:${world.calendar.currentDate}`,
-        sentiment: "VeryNegative",
-      },
-    });
+    if (player) {
+      openThread(world, {
+        kind: "form_crisis",
+        title: `${player.displayName} exit pressure",
+        playerId: payload.playerId,
+        clubIds: payload.clubId ? [payload.clubId] : [],
+        tags: ["oust", payload.severity ?? "listed"],
+        beat: {
+          date: world.calendar.currentDate,
+          summary: `${player.displayName} faces exit pressure (${payload.severity ?? "listed"}).`,
+          sourceEventId: `oust:${payload.playerId}:${world.calendar.currentDate}`,
+          sentiment: "VeryNegative",
+        },
+      });
+    }
   }
 
   if (payload?.type === "player_restored" && payload.playerId) {
@@ -367,7 +373,7 @@ function onNewsGenerated(world: World, payload: any): void {
         crisis,
         {
           date: world.calendar.currentDate,
-          summary: `${payload.name} restored to favour.`,
+          summary: "Restored to favour — transfer list pressure lifted.",
           sourceEventId: `restore:${payload.playerId}:${world.calendar.currentDate}`,
           sentiment: "Positive",
         },
@@ -377,7 +383,6 @@ function onNewsGenerated(world: World, payload: any): void {
     }
   }
 
-  // Awards → award_run thread (user or high-rep players)
   if (payload?.type === "award" && payload.playerId) {
     const player = world.players.get(payload.playerId);
     if (!player) return;
@@ -388,7 +393,7 @@ function onNewsGenerated(world: World, payload: any): void {
     if (!run) {
       openThread(world, {
         kind: "award_run",
-        title: `${player.displayName} awards`,
+        title: `${player.displayName} awards",
         playerId: payload.playerId,
         clubIds: player.currentClubId ? [player.currentClubId] : [],
         tags: ["award"],
@@ -409,7 +414,7 @@ function onNewsGenerated(world: World, payload: any): void {
       let summary = `Adds ${label} to the collection.`;
       let sentiment: ThreadBeat["sentiment"] = "Positive";
       if (/TeamOfTheWeek/i.test(label) && totwCount >= 3) {
-        summary = `${totwCount}× Team of the Week this season — media push Player of the Month talk.`;
+        summary = `${totwCount}x Team of the Week this season — media push Player of the Month talk.`;
         sentiment = "VeryPositive";
       } else if (/Month/i.test(label)) {
         summary = `Named ${label} — awards run peaks.`;
@@ -418,7 +423,11 @@ function onNewsGenerated(world: World, payload: any): void {
         summary = `Season-defining honour: ${label}.`;
         sentiment = "VeryPositive";
       }
-      appendBeat(run, { date: world.calendar.currentDate, summary, sourceEventId: src, sentiment }, world);
+      appendBeat(
+        run,
+        { date: world.calendar.currentDate, summary, sourceEventId: src, sentiment },
+        world
+      );
       if (/Season|Golden|PlayerOfTheYear/i.test(label) && run.beats.length >= 2) {
         resolveThread(run, world, `${player.displayName} sealed a major seasonal award.`);
       }
@@ -426,10 +435,6 @@ function onNewsGenerated(world: World, payload: any): void {
   }
 }
 
-/**
- * Attach narrative engine to the world event bus.
- * Call once during bootstrap / session start.
- */
 export function attachNarrativeEngine(world: World): void {
   world.events.on(Events.TRANSFER_COMPLETED, (p) => onTransferCompleted(world, p as any));
   world.events.on(Events.TRANSFER_OFFER, (p) => onTransferOffer(world, p as any));
@@ -441,7 +446,6 @@ export function attachNarrativeEngine(world: World): void {
   });
 }
 
-/** Snapshot for UI / API */
 export function snapshotThreads(
   world: World,
   opts?: { playerId?: EntityId; limit?: number }
@@ -456,12 +460,19 @@ export function snapshotThreads(
   beatCount: number;
   latestBeat: string;
   openedDate: string;
+  updatedDate: string;
+  tags: string[];
+  beats: ThreadBeat[];
 }> {
-  let list = store(world).slice().sort((a, b) => (a.updatedDate < b.updatedDate ? 1 : -1));
+  let list = [...store(world)].sort(
+    (a, b) => (a.updatedDate < b.updatedDate ? 1 : -1)
+  );
   if (opts?.playerId) {
-    list = list.filter((t) => t.playerId === opts.playerId || t.clubIds.length);
+    list = list.filter(
+      (t) => t.playerId === opts.playerId || t.beats.length > 0
+    );
   }
-  const limit = opts?.limit ?? 12;
+  const limit = opts?.limit ?? 20;
   return list.slice(0, limit).map((t) => ({
     id: t.id,
     kind: t.kind,
@@ -473,5 +484,8 @@ export function snapshotThreads(
     beatCount: t.beats.length,
     latestBeat: t.beats[t.beats.length - 1]?.summary ?? "",
     openedDate: t.openedDate,
+    updatedDate: t.updatedDate,
+    tags: t.tags,
+    beats: t.beats,
   }));
 }
