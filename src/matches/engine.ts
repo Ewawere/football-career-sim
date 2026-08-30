@@ -2,6 +2,7 @@
  * Match simulation engine.
  * Integrates: strength, formations/roles, momentum, injuries, subs,
  * interactive moments (auto-resolved unless caller intercepts), performance pipeline.
+ * Game-state AI: chase when losing, protect when leading (score-margin aware).
  */
 
 import { RNG } from "../core/rng.js";
@@ -391,6 +392,17 @@ export function simulateMatch(
     }
     match.context.homeScore = match.homeScore;
     match.context.awayScore = match.awayScore;
+
+    // Stronger swing after equaliser / late goal / multi-goal lead
+    const gd = match.homeScore - match.awayScore;
+    const late = minute >= 75 ? 1.35 : minute >= 60 ? 1.15 : 1.0;
+    if (isHome) {
+      const boost = (gd === 0 ? 10 : gd === 1 ? 6 : 4) * late;
+      match.context.momentum = Math.min(100, match.context.momentum + boost);
+    } else {
+      const boost = (gd === 0 ? 10 : gd === -1 ? 6 : 4) * late;
+      match.context.momentum = Math.max(-100, match.context.momentum - boost);
+    }
     match.momentum = match.context.momentum;
 
     match.events.push({
@@ -403,6 +415,35 @@ export function simulateMatch(
         ? `GOAL! ${scorer.displayName} (${minute}') assisted by ${assister.displayName}`
         : `GOAL! ${scorer.displayName} (${minute}')`,
     });
+
+    // Immediate chase / protect reaction (not only on fixed AI ticks)
+    if (minute >= 55) {
+      const homeAI = computeTeamAI(world, match, true);
+      const awayAI = computeTeamAI(world, match, false);
+      (match.context as any).homeAI = homeAI;
+      (match.context as any).awayAI = awayAI;
+      const windowEnd = Math.min(90, minute + 10);
+      if (homeAI.gameState === "Losing" && rng.chance(0.22 * homeAI.attackBias)) {
+        goalMinutesHome.push(rng.int(Math.min(minute + 1, 90), windowEnd));
+        goalMinutesHome.sort((a, b) => a - b);
+      }
+      if (awayAI.gameState === "Losing" && rng.chance(0.22 * awayAI.attackBias)) {
+        goalMinutesAway.push(rng.int(Math.min(minute + 1, 90), windowEnd));
+        goalMinutesAway.sort((a, b) => a - b);
+      }
+      if (match.homeScore - match.awayScore >= 2 && goalMinutesAway.length) {
+        const lateIdx = goalMinutesAway.findIndex((m) => m > minute);
+        if (lateIdx >= 0 && rng.chance(0.18 * Math.max(0, homeAI.defendBias - 0.9))) {
+          goalMinutesAway.splice(lateIdx, 1);
+        }
+      }
+      if (match.awayScore - match.homeScore >= 2 && goalMinutesHome.length) {
+        const lateIdx = goalMinutesHome.findIndex((m) => m > minute);
+        if (lateIdx >= 0 && rng.chance(0.18 * Math.max(0, awayAI.defendBias - 0.9))) {
+          goalMinutesHome.splice(lateIdx, 1);
+        }
+      }
+    }
   };
 
   const trySub = (
@@ -601,29 +642,52 @@ export function simulateMatch(
       }
     }
 
-    if (minute === 60 || minute === 70 || minute === 80) {
+    // Game-state AI ticks: mentality drifts; chase / protect late
+    if (minute === 50 || minute === 60 || minute === 70 || minute === 75 || minute === 80 || minute === 85) {
       const homeAI = computeTeamAI(world, match, true);
       const awayAI = computeTeamAI(world, match, false);
       (match.context as any).homeAI = homeAI;
       (match.context as any).awayAI = awayAI;
 
-      if (minute === 80) {
-        if (homeAI.gameState === "Losing" && rng.chance(0.22 * homeAI.attackBias)) {
-          goalMinutesHome.push(rng.int(81, 90));
+      const pressDelta = (homeAI.pressing - awayAI.pressing) * 4;
+      match.context.momentum = Math.max(
+        -100,
+        Math.min(100, match.context.momentum + pressDelta + (homeAI.tempo - awayAI.tempo) * 2)
+      );
+      match.momentum = match.context.momentum;
+
+      if (minute >= 70) {
+        const windowEnd = Math.min(90, minute + 8);
+        if (homeAI.gameState === "Losing" && rng.chance(0.14 * homeAI.attackBias)) {
+          goalMinutesHome.push(rng.int(minute + 1, windowEnd));
+          goalMinutesHome.sort((a, b) => a - b);
         }
-        if (awayAI.gameState === "Losing" && rng.chance(0.22 * awayAI.attackBias)) {
-          goalMinutesAway.push(rng.int(81, 90));
+        if (awayAI.gameState === "Losing" && rng.chance(0.14 * awayAI.attackBias)) {
+          goalMinutesAway.push(rng.int(minute + 1, windowEnd));
+          goalMinutesAway.sort((a, b) => a - b);
+        }
+        if (homeAI.gameState === "Winning" && homeAI.defendBias > 1.05 && goalMinutesAway.length) {
+          const lateIdx = goalMinutesAway.findIndex((m) => m > minute);
+          if (lateIdx >= 0 && rng.chance(0.12 * (homeAI.defendBias - 1))) {
+            goalMinutesAway.splice(lateIdx, 1);
+          }
+        }
+        if (awayAI.gameState === "Winning" && awayAI.defendBias > 1.05 && goalMinutesHome.length) {
+          const lateIdx = goalMinutesHome.findIndex((m) => m > minute);
+          if (lateIdx >= 0 && rng.chance(0.12 * (awayAI.defendBias - 1))) {
+            goalMinutesHome.splice(lateIdx, 1);
+          }
         }
       }
 
-      for (const [isHome, ai] of [
+      for (const [isHomeSide, teamAI] of [
         [true, homeAI] as const,
         [false, awayAI] as const,
       ]) {
-        if ((isHome ? homeSubCount : awaySubCount).n >= maxSubs) continue;
-        const pick = pickSmartSub(world, match, isHome, ai);
-        if (pick && rng.chance(ai.gameState === "Losing" ? 0.75 : 0.55)) {
-          trySub(isHome, pick.offId, minute, "tactical");
+        if ((isHomeSide ? homeSubCount : awaySubCount).n >= maxSubs) continue;
+        const pick = pickSmartSub(world, match, isHomeSide, teamAI);
+        if (pick && rng.chance(teamAI.gameState === "Losing" ? 0.78 : 0.55)) {
+          trySub(isHomeSide, pick.offId, minute, "tactical");
         }
       }
     }
