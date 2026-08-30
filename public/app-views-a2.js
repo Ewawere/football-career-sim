@@ -94,7 +94,7 @@ function renderClubSocial() {
     return `
     <div class="social-card">
       <div class="sc-head">
-        <div class="sc-avatar">${handle.slice(0, 2).toUpperCase()}</div>
+        ${crestSlot(acc.displayName || handle, 40)}
         <div>
           <div style="font-weight:800;font-size:13px">${p.authorLabel || acc.displayName}</div>
           <div class="badge ${badgeClass}" style="margin:4px 0 0">${String(tag).replace(/-/g, " ")}</div>
@@ -110,9 +110,7 @@ function renderClubSocial() {
   return `
   <div class="panel" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:14px">
-      <div class="ovr-box" style="width:56px;height:56px">
-        <div class="num" style="font-size:13px">${(acc.handle || "CL").replace("@","").slice(0,3).toUpperCase()}</div>
-      </div>
+      ${crestSlot(acc.displayName || acc.handle, 56)}
       <div>
         <div style="font-size:18px;font-weight:800">${acc.displayName}</div>
         <div class="muted">${acc.handle} · ${Math.round((acc.followers || 0) / 1000)}k followers ${acc.verified ? "· Verified" : ""}</div>
