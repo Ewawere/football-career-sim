@@ -24,6 +24,10 @@ export interface SelectionContext {
   matchImportance?: number;
 }
 
+/**
+ * Compute a selection score for a player at a position.
+ * Higher = more likely to start.
+ */
 export function selectionScore(
   player: Player,
   targetPosition: Position,
@@ -32,9 +36,11 @@ export function selectionScore(
   const reasons: string[] = [];
   let score = 0;
 
+  // Base ability
   score += player.ovr * 1.0;
   reasons.push(`OVR ${player.ovr}`);
 
+  // Position suitability
   if (player.primaryPosition === targetPosition) {
     score += 12;
     reasons.push("Primary position");
@@ -46,38 +52,64 @@ export function selectionScore(
     reasons.push("Out of position");
   }
 
-  const formMod = (player.state.form - 50) * 0.2;
+  // Form (0-100) — stronger weight so hot/cold streaks change XI
+  const formMod = (player.state.form - 50) * 0.38;
   score += formMod;
-  if (Math.abs(formMod) > 2) reasons.push(`Form ${player.state.form.toFixed(0)}`);
+  if (player.state.form >= 75) {
+    score += 4;
+    reasons.push(`Hot form ${player.state.form.toFixed(0)}`);
+  } else if (player.state.form <= 35) {
+    score -= 6;
+    reasons.push(`Cold form ${player.state.form.toFixed(0)}`);
+  } else if (Math.abs(formMod) > 2) {
+    reasons.push(`Form ${player.state.form.toFixed(0)}`);
+  }
 
+  // Fitness
   if (player.state.fitness < 50) {
-    score -= 25;
+    score -= 28;
     reasons.push("Low fitness");
   } else if (player.state.fitness < 70) {
-    score -= 8;
+    score -= 10;
     reasons.push("Reduced fitness");
   } else {
-    score += (player.state.fitness - 80) * 0.1;
+    score += (player.state.fitness - 80) * 0.12;
   }
 
-  score += (player.state.sharpness - 70) * 0.08;
-  score += (player.state.morale - 50) * 0.1;
+  // Sharpness
+  score += (player.state.sharpness - 70) * 0.1;
 
-  if (player.state.ratingCount >= 3) {
+  // Morale
+  score += (player.state.morale - 50) * 0.14;
+
+  // Recent performance (season avg rating 0-100 scale)
+  if (player.state.ratingCount >= 2) {
     const avg = player.state.averageRatingThisSeason;
-    score += (avg - 60) * 0.15;
-    reasons.push(`Season rating ${(avg / 10).toFixed(1)}`);
+    score += (avg - 60) * 0.22;
+    if (avg >= 75 && player.state.ratingCount >= 3) {
+      score += 5;
+      reasons.push(`In form ${(avg / 10).toFixed(1)} avg`);
+    } else if (avg < 55 && player.state.ratingCount >= 4) {
+      score -= 7;
+      reasons.push(`Poor run ${(avg / 10).toFixed(1)} avg`);
+    } else {
+      reasons.push(`Season rating ${(avg / 10).toFixed(1)}`);
+    }
   }
 
+  // Age: slight preference for peak years in important matches
   if (matchImportance > 0.7) {
     if (player.age >= 24 && player.age <= 29) score += 3;
     if (player.age <= 18) score -= 4;
   } else {
+    // Rotate youth in lesser games
     if (player.age <= 20) score += 2;
   }
 
+  // Reputation mild
   score += player.reputation * 0.05;
 
+  // Manager trust — underperformers get frozen out
   const trust = player.state.managerTrust ?? 50;
   if (trust < 30) {
     score -= 18;
@@ -89,6 +121,7 @@ export function selectionScore(
     score += 4;
   }
 
+  // Transfer-listed players deprioritised for starts
   if ((player.state as any).transferListed) {
     score -= 12;
     reasons.push("Transfer listed");
