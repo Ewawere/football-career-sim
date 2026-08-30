@@ -168,9 +168,6 @@ export function applyAIToChance(
   return Math.max(0.01, Math.min(0.95, c));
 }
 
-/**
- * Smart substitution targets: tired, poor rating, tactical (trailing → attack).
- */
 export function pickSmartSub(
   world: World,
   match: Match,
