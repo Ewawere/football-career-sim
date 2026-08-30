@@ -19,10 +19,22 @@ import { runTransferWindow, formatWindowReport } from "../transfers/window.js";
 import { pruneAllClubs, fillThinSquads } from "../transfers/squad-rules.js";
 import { runYouthCycle } from "../scouting/engine.js";
 import { runInternationalBreak } from "../international/selection.js";
-import { computeSeasonAwards, computeMonthlyAwards, computeInternationalAwards, awardLeagueAndCupTrophies } from "../awards/engine.js";
+import {
+  computeSeasonAwards,
+  computeMonthlyAwards,
+  computeTeamOfTheWeek,
+  computeInternationalAwards,
+  awardLeagueAndCupTrophies,
+} from "../awards/engine.js";
 import { evaluateRecords } from "../awards/records.js";
 import { processRetirements } from "../awards/legacy.js";
-import { updateBoardConfidenceAfterMatch, endOfSeasonBoardReview, processManagerSackings } from "../managers/career.js";
+import {
+  updateBoardConfidenceAfterMatch,
+  endOfSeasonBoardReview,
+  processManagerSackings,
+  generateJobOffers,
+} from "../managers/career.js";
+import { processUnderperformingPlayers } from "../career/performance-consequences.js";
 function getActiveInjurySafe(world: any, id: string) { return getActiveInjury(world, id); }
 
 const LEAGUE_DEFS: { nation: string; name: string; shortName: string }[] = [
@@ -155,11 +167,11 @@ export function startSeason(world: World, leagueName = "Premier League"): Compet
 
   const cupNames: Record<string, { main: string; league?: string; super?: string }> = {
     England: { main: "FA Cup", league: "EFL Cup", super: "Community Shield" },
-    Spain: { main: "Copa del Rey", super: "Supercopa de España" },
+    Spain: { main: "Copa del Rey", super: "Supercopa de Espa\u00f1a" },
     Germany: { main: "DFB-Pokal", super: "DFL-Supercup" },
     Italy: { main: "Coppa Italia", super: "Supercoppa Italiana" },
-    France: { main: "Coupe de France", league: "Coupe de la Ligue", super: "Trophée des Champions" },
-    Portugal: { main: "Taça de Portugal", league: "Taça da Liga", super: "Supertaça" },
+    France: { main: "Coupe de France", league: "Coupe de la Ligue", super: "Troph\u00e9e des Champions" },
+    Portugal: { main: "Ta\u00e7a de Portugal", league: "Ta\u00e7a da Liga", super: "Superta\u00e7a" },
     Netherlands: { main: "KNVB Cup", super: "Johan Cruyff Shield" },
   };
   for (const def of LEAGUE_DEFS) {
@@ -209,7 +221,7 @@ export function startSeason(world: World, leagueName = "Premier League"): Compet
   });
 
   console.log(
-    `[Season] Europe ${seasonId}: ${leagueIds.length} leagues, ${cupIds.length} cups/continental — primary ${primary.name}`
+    `[Season] Europe ${seasonId}: ${leagueIds.length} leagues, ${cupIds.length} cups/continental \u2014 primary ${primary.name}`
   );
 
   return primary;
@@ -293,6 +305,41 @@ export function playMatchday(world: World, competitionId: EntityId, matchday: nu
 
   competition.currentMatchday = matchday;
   if (world.season) world.season.activeMatchday = matchday;
+
+  if (played > 0 && competition.type === "League") {
+    const totw = computeTeamOfTheWeek(
+      world,
+      competitionId,
+      competition.seasonId,
+      matchday
+    );
+    if (totw.length) {
+      console.log(`[Awards] Team of the Week MD${matchday}: ${totw.length} players`);
+    }
+  }
+
+  if (matchday > 0 && matchday % 3 === 0) {
+    const sacked = processManagerSackings(world);
+    if (sacked.length) {
+      console.log(`[Managers] Sacked: ${sacked.map((m) => m.displayName).join(", ")}`);
+      generateJobOffers(world);
+    }
+  }
+
+  if (matchday > 0 && matchday % 2 === 0) {
+    const ousted = processUnderperformingPlayers(world);
+    const notable = ousted.filter(
+      (o) =>
+        o.action === "TransferListed" ||
+        o.action === "ForcedExitPressure" ||
+        o.action === "LoanListed"
+    );
+    if (notable.length) {
+      console.log(
+        `[Squad] Performance pressure: ${notable.length} players listed/loaned`
+      );
+    }
+  }
 
   for (let d = 0; d < 7; d++) tickInjuries(world);
   for (const p of world.players.values()) {
