@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Football Career Sim</title>
+  <link rel="stylesheet" href="/polish.css" />
   <style>
     :root {
       --bg: #0b0f17; --bg2: #0f141f; --panel: #141b28; --panel2: #1b2436; --panel3: #232d42;
@@ -43,7 +44,6 @@
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
     .grid-hero { display: grid; grid-template-columns: 320px 1fr; gap: 14px; }
-    @media (max-width: 1200px) { .grid-hero { grid-template-columns: 1fr; } .grid-4 { grid-template-columns: 1fr 1fr; } }
     .hero-card { background: linear-gradient(145deg, #1a2740 0%, #121a2b 50%, #0e1624 100%); border: 1px solid var(--line2); border-radius: 14px; padding: 20px; position: relative; overflow: hidden; }
     .hero-top { display: flex; gap: 16px; align-items: flex-start; position: relative; }
     .ovr-box { width: 72px; height: 72px; border-radius: 12px; background: linear-gradient(135deg, var(--accent) 0%, #1a9e74 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #04120c; font-weight: 900; flex-shrink: 0; }
@@ -78,12 +78,6 @@
     .poss-bar { display: flex; height: 28px; border-radius: 8px; overflow: hidden; font-size: 12px; font-weight: 800; margin: 12px 0 18px; }
     .poss-bar .h { background: var(--blue); display: flex; align-items: center; justify-content: center; }
     .poss-bar .a { background: #93c5fd; color: #0f172a; display: flex; align-items: center; justify-content: center; }
-    .stat-row { display: grid; grid-template-columns: 1fr 1.4fr 1fr; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(42,53,74,0.4); }
-    .stat-row .hl { text-align: right; font-weight: 700; }
-    .stat-row .al { text-align: left; font-weight: 700; }
-    .stat-row .lab { text-align: center; color: var(--muted); font-size: 12px; }
-    .stat-row .chip { display: inline-block; padding: 3px 10px; border-radius: 12px; background: var(--panel3); font-weight: 700; font-size: 12px; }
-    .stat-row .chip.blue { background: var(--blue-dim); color: #93c5fd; }
     .feed-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 10px; }
     .feed-card .badge { display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 4px; margin-bottom: 8px; background: var(--panel3); color: var(--muted); text-transform: uppercase; }
     .feed-card .badge.breaking { background: rgba(239,68,68,0.2); color: #fca5a5; }
@@ -195,6 +189,9 @@
     </main>
   </div>
   <div class="toast" id="toast"></div>
-  <script src="/app.js"></script>
+  <script src="/app-core.js"></script>
+  <script src="/app-views-a.js"></script>
+  <script src="/app-views-b.js"></script>
+  <script src="/app-boot.js"></script>
 </body>
 </html>
