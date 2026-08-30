@@ -1,5 +1,5 @@
 /**
- * Expanded awards — season, monthly, team of the season, manager awards.
+ * Expanded awards — season, monthly, team of the season/week, manager awards.
  * All driven by real stats / results.
  */
 
@@ -56,9 +56,11 @@ function emitAwardNews(world: World, a: Award): void {
           ? 5
           : a.type === "GoldenBoot" || a.type === "TeamOfTheSeason"
             ? 4
-            : a.type === "PlayerOfTheMonth"
-              ? 2
-              : 3;
+            : a.type === "TeamOfTheWeek"
+              ? 1
+              : a.type === "PlayerOfTheMonth"
+                ? 2
+                : 3;
       player.reputation = Math.min(100, player.reputation + bump);
     }
   }
@@ -273,6 +275,116 @@ export function computeSeasonAwards(
   return awards;
 }
 
+export function computeTeamOfTheWeek(
+  world: World,
+  competitionId: EntityId,
+  seasonId: string,
+  matchday: number
+): Award[] {
+  const awards: Award[] = [];
+  const competition = world.competitions.get(competitionId);
+  if (!competition) return awards;
+
+  const fixtures = [...world.fixtures.values()].filter(
+    (f) => f.competitionId === competitionId && f.matchday === matchday && f.played && f.matchId
+  );
+  if (!fixtures.length) return awards;
+
+  type Cand = {
+    playerId: EntityId;
+    clubId: EntityId | null;
+    position: Position;
+    rating: number;
+    goals: number;
+    assists: number;
+    isGk: boolean;
+  };
+  const candidates: Cand[] = [];
+
+  for (const f of fixtures) {
+    const match = world.matches.get(f.matchId!);
+    if (!match || match.status !== "Finished") continue;
+    for (const [pid, st] of match.playerStats) {
+      if (st.minutes < 45) continue;
+      const p = world.players.get(pid);
+      if (!p || p.retired) continue;
+      candidates.push({
+        playerId: pid,
+        clubId: p.currentClubId,
+        position: p.primaryPosition,
+        rating: st.rating,
+        goals: st.goals,
+        assists: st.assists,
+        isGk: p.primaryPosition === "GK",
+      });
+    }
+  }
+
+  if (candidates.length < 6) return awards;
+
+  const score = (c: Cand) => c.rating + c.goals * 8 + c.assists * 5;
+
+  const slots: { pos: Position; filter: (c: Cand) => boolean; count: number }[] = [
+    { pos: "GK", filter: (c) => c.isGk, count: 1 },
+    { pos: "CB", filter: (c) => c.position === "CB", count: 2 },
+    { pos: "LB", filter: (c) => c.position === "LB" || c.position === "LWB", count: 1 },
+    { pos: "RB", filter: (c) => c.position === "RB" || c.position === "RWB", count: 1 },
+    { pos: "CM", filter: (c) => ["CDM", "CM", "CAM"].includes(c.position), count: 3 },
+    { pos: "LW", filter: (c) => c.position === "LW" || c.position === "LM", count: 1 },
+    { pos: "RW", filter: (c) => c.position === "RW" || c.position === "RM", count: 1 },
+    { pos: "ST", filter: (c) => c.position === "ST" || c.position === "CF", count: 1 },
+  ];
+
+  const used = new Set<EntityId>();
+  for (const slot of slots) {
+    const pool = candidates
+      .filter((c) => slot.filter(c) && !used.has(c.playerId))
+      .sort((a, b) => score(b) - score(a));
+    for (let i = 0; i < slot.count && i < pool.length; i++) {
+      const pick = pool[i]!;
+      used.add(pick.playerId);
+      const a = makeAward(world, "TeamOfTheWeek", seasonId, competitionId, {
+        playerId: pick.playerId,
+        clubId: pick.clubId,
+        value: Math.round(score(pick)),
+        month: matchday,
+        position: slot.pos,
+      });
+      storeAward(world, a);
+      emitAwardNews(world, a);
+      const pl = world.players.get(pick.playerId);
+      if (pl) {
+        pl.state.form = Math.min(100, pl.state.form + 2);
+        pl.state.morale = Math.min(100, pl.state.morale + 1.5);
+        pl.state.managerTrust = Math.min(100, pl.state.managerTrust + 1);
+      }
+      awards.push(a);
+    }
+  }
+
+  if (awards.length < 11) {
+    const leftover = candidates
+      .filter((c) => !used.has(c.playerId))
+      .sort((a, b) => score(b) - score(a));
+    for (const pick of leftover) {
+      if (awards.length >= 11) break;
+      used.add(pick.playerId);
+      const a = makeAward(world, "TeamOfTheWeek", seasonId, competitionId, {
+        playerId: pick.playerId,
+        clubId: pick.clubId,
+        value: Math.round(score(pick)),
+        month: matchday,
+        position: pick.position,
+      });
+      storeAward(world, a);
+      emitAwardNews(world, a);
+      awards.push(a);
+    }
+  }
+
+  return awards;
+}
+
 export function computeMonthlyAwards(
   world: World,
   competitionId: EntityId,
@@ -386,7 +498,7 @@ export function awardLeagueAndCupTrophies(world: World): Award[] {
       const clubs = comp.clubIds
         .map((id) => world.clubs.get(id))
         .filter(Boolean)
-        .sort((a, b) => (b!.reputation - a!.reputation));
+        .sort((a, b) => b!.reputation - a!.reputation);
       winnerId = clubs[0]?.id ?? null;
       type = comp.type === "SuperCup" ? "SuperCupWinner" : "CupWinner";
     }
