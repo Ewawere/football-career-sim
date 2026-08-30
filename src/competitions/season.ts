@@ -167,11 +167,11 @@ export function startSeason(world: World, leagueName = "Premier League"): Compet
 
   const cupNames: Record<string, { main: string; league?: string; super?: string }> = {
     England: { main: "FA Cup", league: "EFL Cup", super: "Community Shield" },
-    Spain: { main: "Copa del Rey", super: "Supercopa de Espa\u00f1a" },
+    Spain: { main: "Copa del Rey", super: "Supercopa de España" },
     Germany: { main: "DFB-Pokal", super: "DFL-Supercup" },
     Italy: { main: "Coppa Italia", super: "Supercoppa Italiana" },
-    France: { main: "Coupe de France", league: "Coupe de la Ligue", super: "Troph\u00e9e des Champions" },
-    Portugal: { main: "Ta\u00e7a de Portugal", league: "Ta\u00e7a da Liga", super: "Superta\u00e7a" },
+    France: { main: "Coupe de France", league: "Coupe de la Ligue", super: "Trophée des Champions" },
+    Portugal: { main: "Taça de Portugal", league: "Taça da Liga", super: "Supertaça" },
     Netherlands: { main: "KNVB Cup", super: "Johan Cruyff Shield" },
   };
   for (const def of LEAGUE_DEFS) {
@@ -221,7 +221,7 @@ export function startSeason(world: World, leagueName = "Premier League"): Compet
   });
 
   console.log(
-    `[Season] Europe ${seasonId}: ${leagueIds.length} leagues, ${cupIds.length} cups/continental \u2014 primary ${primary.name}`
+    `[Season] Europe ${seasonId}: ${leagueIds.length} leagues, ${cupIds.length} cups/continental — primary ${primary.name}`
   );
 
   return primary;
@@ -234,14 +234,6 @@ export function playMatchday(world: World, competitionId: EntityId, matchday: nu
   if (matchday === 5 || matchday === 13 || matchday === 25) {
     runInternationalBreak(world, 10);
     console.log(`[International] Break before MD${matchday}`);
-  }
-
-  if (matchday > 1 && matchday % 4 === 0) {
-    const month = Math.ceil(matchday / 4);
-    const monthly = computeMonthlyAwards(world, competitionId, competition.seasonId, month);
-    if (monthly.length) {
-      console.log(`[Awards] Month ${month}: ${monthly.map((a) => a.type).join(", ")}`);
-    }
   }
 
   const fixtures = [...world.fixtures.values()].filter(
@@ -318,15 +310,18 @@ export function playMatchday(world: World, competitionId: EntityId, matchday: nu
     }
   }
 
+  // Manager pressure / sackings every few matchdays; always refill vacancies
   if (matchday > 0 && matchday % 3 === 0) {
     const sacked = processManagerSackings(world);
     if (sacked.length) {
       console.log(`[Managers] Sacked: ${sacked.map((m) => m.displayName).join(", ")}`);
-      generateJobOffers(world);
     }
   }
+  // Clubs never stay managerless for long (AI hire into vacant seats)
+  generateJobOffers(world);
 
-  if (matchday > 0 && matchday % 2 === 0) {
+  // Underperforming players: bench / list / loan pressure (every matchday after MD3)
+  if (matchday >= 3) {
     const ousted = processUnderperformingPlayers(world);
     const notable = ousted.filter(
       (o) =>
@@ -338,6 +333,15 @@ export function playMatchday(world: World, competitionId: EntityId, matchday: nu
       console.log(
         `[Squad] Performance pressure: ${notable.length} players listed/loaned`
       );
+    }
+  }
+
+  // Player / Manager of the Month roughly every 4 matchdays
+  if (matchday > 0 && matchday % 4 === 0 && competition.type === "League") {
+    const month = Math.ceil(matchday / 4);
+    const monthly = computeMonthlyAwards(world, competitionId, competition.seasonId, month);
+    if (monthly.length) {
+      console.log(`[Awards] Month ${month}: ${monthly.map((a) => a.type).join(", ")}`);
     }
   }
 
