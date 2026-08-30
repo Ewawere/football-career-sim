@@ -8,13 +8,17 @@ function renderOverview() {
   <div class="hub-grid">
     <div class="hero-card">
       <div class="hero-top">
+        ${faceSlot(p, 72)}
         <div class="ovr-box">
           <div class="num">${p.ovr ?? "—"}</div>
           <div class="pos">${p.position || ""}</div>
         </div>
         <div class="hero-info">
           <h2>${p.name || "—"}</h2>
-          <div class="club">${p.club || "Free agent"} · Age ${p.age ?? "—"}</div>
+          <div class="club" style="display:flex;align-items:center;gap:8px;margin-top:6px">
+            ${crestSlot(p.club, 22)}
+            <span>${p.club || "Free agent"} · Age ${p.age ?? "—"}</span>
+          </div>
           <div class="foot-pill">${p.preferredFoot || "—"} foot · ${p.nationality || ""} · ${p.heightCm ? p.heightCm + "cm" : ""}</div>
         </div>
       </div>
@@ -38,7 +42,7 @@ function renderOverview() {
     <div>
       <div class="next-match-card">
         <div class="nm-label">Club status</div>
-        <div class="nm-teams">${p.club || "—"} · ${ord(pos?.pos)} place</div>
+        <div class="nm-teams" style="display:flex;align-items:center;gap:10px">${crestSlot(p.club, 28)}<span>${p.club || "—"} · ${ord(pos?.pos)} place</span></div>
         <div class="nm-meta">${pos ? `${pos.pts} pts · ${pos.played} played · GD ${pos.gd > 0 ? "+" + pos.gd : pos.gd}` : "Play matchdays to fill the table"}</div>
         ${formPills(clubForm)}
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -93,7 +97,7 @@ function renderLeague() {
   const rows = (hub.table || []).map((r, i) => `
     <tr class="${hub.player && r.clubId === hub.player.clubId ? "me" : ""}">
       <td><b>${r.pos ?? i + 1}</b></td>
-      <td>${r.club || r.name || r.clubName || "—"}</td>
+      <td style="display:flex;align-items:center;gap:8px">${crestSlot(r.club || r.name || r.clubName, 20)}<span>${r.club || r.name || r.clubName || "—"}</span></td>
       <td>${r.played ?? r.pl ?? 0}</td>
       <td>${r.won ?? r.w ?? 0}</td>
       <td>${r.drawn ?? r.d ?? 0}</td>
