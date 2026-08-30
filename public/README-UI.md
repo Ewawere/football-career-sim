@@ -1,7 +1,13 @@
-# UI polish (local)
+# Web UI layout
 
-Polished Career Hub / Match Stats / Club Social is in the agent workspace under `public/app.html` + `public/app.js`.
+Load order (see `app.html`):
 
-If `public/app.js` on main is truncated, replace it with the full local file from the development session (hub-grid, match-layout, social-grid, newsBadgeClass, formPills, career impact panel).
+1. `polish.css` — Career Hub / match / social styles
+2. `app-core.js` — state, API, helpers, router
+3. `app-views-a.js` — overview, league, match stats, social, transfers, development
+4. `app-views-b.js` — press, news, inbox, squad, market
+5. `app-boot.js` — actions, create career, header buttons
 
-Run: `npm run play:web` then open the app.
+`app.js` is a legacy stub only.
+
+Simulation facade: `src/ui/api.ts` (hub includes narrative `threads`).

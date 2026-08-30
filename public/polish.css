@@ -1,0 +1,118 @@
+/* Career Hub density + match/social polish */
+.hub-grid {
+  display: grid;
+  grid-template-columns: 300px 1fr 340px;
+  gap: 14px;
+  align-items: start;
+}
+@media (max-width: 1280px) {
+  .hub-grid { grid-template-columns: 280px 1fr; }
+  .hub-grid .hub-news { grid-column: 1 / -1; }
+}
+@media (max-width: 960px) {
+  .hub-grid { grid-template-columns: 1fr; }
+}
+.hero-card .foot-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 10px; padding: 5px 10px; border-radius: 6px;
+  background: rgba(0,0,0,0.3); font-size: 12px; color: var(--muted);
+}
+.hero-card .value-line {
+  margin-top: 12px; font-size: 15px; font-weight: 800; color: var(--accent);
+}
+.hero-card .trust-bar {
+  margin-top: 12px; height: 8px; border-radius: 4px;
+  background: var(--panel3); overflow: hidden;
+}
+.hero-card .trust-bar > span {
+  display: block; height: 100%;
+  background: linear-gradient(90deg, var(--accent), #5eead4);
+  border-radius: 4px;
+}
+.next-match-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 18px 20px; margin-bottom: 14px;
+}
+.next-match-card .nm-label {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  color: var(--muted); text-transform: uppercase;
+}
+.next-match-card .nm-teams { font-size: 18px; font-weight: 800; margin-top: 8px; }
+.next-match-card .nm-meta { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.form-pills { display: flex; gap: 4px; margin-top: 12px; }
+.form-pills span {
+  width: 22px; height: 22px; border-radius: 4px; font-size: 10px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.form-pills .W { background: rgba(45,212,160,0.25); color: var(--accent); }
+.form-pills .D { background: rgba(148,163,184,0.2); color: var(--muted); }
+.form-pills .L { background: rgba(239,68,68,0.2); color: #fca5a5; }
+.news-stack .feed-card { margin-bottom: 8px; }
+.badge.transfer { background: rgba(59,130,246,0.2); color: #93c5fd; }
+.badge.award { background: rgba(234,179,8,0.2); color: #fde047; }
+.badge.club { background: rgba(45,212,160,0.15); color: var(--accent); }
+.badge.player { background: rgba(167,139,250,0.2); color: #c4b5fd; }
+.badge.injury { background: rgba(239,68,68,0.15); color: #fca5a5; }
+.match-layout {
+  display: grid; grid-template-columns: 1.1fr 1fr 0.9fr; gap: 14px;
+}
+@media (max-width: 1100px) {
+  .match-layout { grid-template-columns: 1fr 1fr; }
+  .match-layout .impact-col { grid-column: 1 / -1; }
+}
+.stat-bar-row {
+  display: grid; grid-template-columns: 56px 1fr 56px; gap: 8px;
+  align-items: center; padding: 8px 0;
+  border-bottom: 1px solid rgba(42,53,74,0.35); font-size: 12px;
+}
+.stat-bar-row .lab { text-align: center; color: var(--muted); font-size: 11px; }
+.stat-bar-row .num { font-weight: 800; }
+.stat-bar-row .num.r { text-align: right; }
+.mini-bar {
+  height: 6px; border-radius: 3px; background: var(--panel3);
+  display: flex; overflow: hidden;
+}
+.mini-bar .h { background: var(--accent); }
+.mini-bar .a { background: #60a5fa; margin-left: auto; }
+.rating-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-bottom: 1px solid rgba(42,53,74,0.4);
+}
+.rating-row.me { background: var(--accent-dim); }
+.rating-row .r-name { flex: 1; font-weight: 600; font-size: 13px; }
+.rating-row .r-meta { font-size: 11px; color: var(--muted); }
+.impact-stat {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px; background: var(--panel2); border-radius: 8px; margin-bottom: 8px;
+}
+.impact-stat .delta { font-weight: 800; color: var(--accent); font-size: 15px; }
+.impact-stat .delta.neg { color: #fca5a5; }
+.social-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 900px) { .social-grid { grid-template-columns: 1fr; } }
+.social-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px 18px; min-height: 140px; display: flex; flex-direction: column;
+}
+.social-card .sc-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.social-card .sc-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #1a9e74);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 900; color: #04120c;
+}
+.social-card .sc-body {
+  flex: 1; font-size: 14px; font-weight: 600; line-height: 1.45; white-space: pre-wrap;
+}
+.social-card .sc-foot {
+  margin-top: 12px; font-size: 11px; color: var(--muted2); display: flex; gap: 14px;
+}
+.big-rating {
+  text-align: center; padding: 20px 12px;
+  background: linear-gradient(160deg, #1a2740, #0e1624);
+  border-radius: 14px; border: 1px solid var(--line2); margin-bottom: 14px;
+}
+.big-rating .br-num { font-size: 48px; font-weight: 900; color: var(--accent); line-height: 1; }
+.big-rating .br-label {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.08em; text-transform: uppercase; margin-top: 6px;
+}
