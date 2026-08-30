@@ -73,9 +73,6 @@ export function generateTargets(
   maxTargets = 8
 ): TransferTarget[] {
   const needs = analyzeSquadNeeds(world, club);
-  if (!needs.canSpend && club.transferPhilosophy !== "YouthFocused") {
-  }
-
   const urgent = needs.prioritized.filter((p) => p.level !== "None" && p.score >= 18);
   if (urgent.length === 0) return [];
 
@@ -169,6 +166,9 @@ function scoreTarget(
   if (player.age >= 33) parts.age = -12;
   else if (player.age <= 21) parts.age = 5;
   else parts.age = 0;
+  // Prefer buying listed / unwanted players
+  if ((player.state as any).transferListed) parts.listed = 12;
+  if (player.state.managerTrust < 30) parts.trust = 6;
   const total = Object.values(parts).reduce((a, b) => a + b, 0);
   return { total: Math.round(total), parts };
 }
@@ -236,6 +236,10 @@ export function playerWillingness(
     score += 10;
     reasons.push("poor manager relationship");
   }
+  if ((player.state as any).transferListed) {
+    score += 12;
+    reasons.push("wants exit");
+  }
   score = Math.max(0, Math.min(100, score));
   return { interested: score >= 48, score, reasons };
 }
@@ -271,6 +275,24 @@ export function sellerWillingness(
   if (player.ovr >= sellingClub.reputation * 0.98) {
     score -= 22;
     reasons.push("key player");
+  }
+
+  // Transfer-listed / underperformer — club wants them gone
+  if ((player.state as any).transferListed) {
+    score += 28;
+    reasons.push("transfer listed");
+  }
+  if ((player.state as any).loanListed) {
+    score += 12;
+    reasons.push("loan listed");
+  }
+  if (player.state.managerTrust < 30) {
+    score += 10;
+    reasons.push("manager wants rid");
+  }
+  if (player.state.form < 40 && player.state.ratingCount >= 5) {
+    score += 8;
+    reasons.push("poor form");
   }
 
   const isEliteKid = player.age <= 21 && player.potential >= 84;
@@ -473,6 +495,8 @@ export function completeTransfer(
 
   player.state.managerTrust = 55;
   player.state.morale = Math.min(100, player.state.morale + 10);
+  (player.state as any).transferListed = false;
+  (player.state as any).loanListed = false;
   if (seller && buyer.reputation > (seller.reputation ?? 0)) {
     player.reputation = Math.min(100, player.reputation + 3);
   }
