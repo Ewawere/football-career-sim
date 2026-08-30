@@ -46,7 +46,7 @@ export const Events = {
   MATCH_SCHEDULED: "match_scheduled",
   MATCH_STARTED: "match_started",
   MATCH_FINISHED: "match_finished",
-  MATCH_COMPLETED: "match_finished", // alias used across systems
+  MATCH_COMPLETED: "match_finished",
   GOAL_SCORED: "goal_scored",
   CARD_ISSUED: "card_issued",
   INJURY_OCCURRED: "injury_occurred",
@@ -62,6 +62,9 @@ export const Events = {
   LOAN_COMPLETED: "loan_completed",
   CONTRACT_RENEWED: "contract_renewed",
   CONTRACT_EXPIRED: "contract_expired",
+  CONTRACT_REFUSED: "contract_refused",
+  CONTRACT_PRESSURE: "contract_pressure",
+  CONTRACT_OFFER: "contract_offer",
 
   MANAGER_HIRED: "manager_hired",
   MANAGER_SACKED: "manager_sacked",
