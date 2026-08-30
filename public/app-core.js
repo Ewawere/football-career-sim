@@ -63,6 +63,35 @@ function formPills(formStr) {
   return `<div class="form-pills">${[...String(formStr)].map((c) => `<span class="${c}">${c}</span>`).join("")}</div>`;
 }
 
+/** Deterministic palette from string (crest / face placeholder colour) */
+function hashHue(s) {
+  let h = 0;
+  const str = String(s || "x");
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
+
+function faceSlot(player, size) {
+  const p = player || {};
+  const name = p.name || "Player";
+  const parts = name.trim().split(/\s+/);
+  const ini = ((parts[0] && parts[0][0]) || "?") + ((parts[1] && parts[1][0]) || "");
+  const hue = hashHue(name + (p.position || ""));
+  const sz = size || 56;
+  return `<div class="face-slot" style="width:${sz}px;height:${sz}px;--face-hue:${hue}" title="${name}"><span>${ini.toUpperCase()}</span></div>`;
+}
+
+function crestSlot(clubName, size) {
+  const name = clubName || "Club";
+  const words = name.replace(/[^a-zA-Z0-9\s]/g, " ").trim().split(/\s+/).filter(Boolean);
+  let ini = "";
+  if (words.length >= 2) ini = (words[0][0] || "") + (words[1][0] || "");
+  else ini = (words[0] || "CL").slice(0, 2);
+  const hue = hashHue(name);
+  const sz = size || 40;
+  return `<div class="crest-slot" style="width:${sz}px;height:${sz}px;--crest-hue:${hue}" title="${name}"><span>${ini.toUpperCase()}</span></div>`;
+}
+
 function ratingClass(r) {
   if (r >= 7.5) return "high";
   if (r >= 6.0) return "mid";
@@ -91,6 +120,8 @@ function render() {
   $("sideName").textContent = p ? p.name : "—";
   $("sideMeta").textContent = p ? `${p.position} · ${p.club || "Free Agent"}` : "—";
   $("sideOvr").textContent = p ? `${p.ovr} OVR` : "— OVR";
+  const sf = $("sideFace");
+  if (sf) sf.innerHTML = p ? faceSlot(p, 40) : "";
 
   const titles = {
     overview: ["OVERVIEW", p?.name || "Career", p ? `${p.club} · ${p.position} · Age ${p.age}` : ""],
