@@ -25,6 +25,8 @@ export interface WindowReport {
   }[];
   freeAgents: number;
   expired: number;
+  renewed: number;
+  refused: number;
   loanReturns: number;
 }
 
@@ -34,11 +36,16 @@ export function runTransferWindow(world: World): WindowReport {
     loans: [],
     freeAgents: 0,
     expired: 0,
+    renewed: 0,
+    refused: 0,
     loanReturns: 0,
   };
 
   report.loanReturns = processLoanReturns(world);
-  report.expired = processContractExpiries(world);
+  const contracts = processContractExpiries(world);
+  report.expired = contracts.expired.length;
+  report.renewed = contracts.renewed.length;
+  report.refused = contracts.refused.length;
   report.freeAgents = processFreeAgentSignings(world);
 
   const loanDeals = processLoanWindow(world);
@@ -132,7 +139,7 @@ export function runTransferWindow(world: World): WindowReport {
 }
 
 export function formatWindowReport(world: World, report: WindowReport): string {
-  let out = `Transfer window: ${report.transfers.length} transfers, ${report.loans.length} loans, ${report.freeAgents} FA, ${report.expired} expired, ${report.loanReturns} returns\n`;
+  let out = `Transfer window: ${report.transfers.length} transfers, ${report.loans.length} loans, ${report.freeAgents} FA, ${report.expired} expired, ${report.renewed} renewed, ${report.refused} refused, ${report.loanReturns} returns\n`;
   for (const t of report.transfers.slice(0, 20)) {
     const p = world.players.get(t.playerId);
     const to = world.clubs.get(t.toClubId)?.shortName ?? "?";
