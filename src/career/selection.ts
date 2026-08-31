@@ -76,17 +76,19 @@ export function selectionScore(
   score += (player.state.sharpness - 70) * 0.1;
   const comePen = getComebackPenalty(world, player.id);
   if (comePen > 0.05) {
-    score -= comePen * 28;
-    if (comePen > 0.35) {
-      score -= 8;
-      reasons.push("Long-term injury return — managed minutes");
-    } else if (comePen > 0.2) {
+    // Comeback dip: managers protect assets early after long layoffs
+    score -= comePen * 34;
+    if (comePen > 0.4) {
+      score -= 14;
+      reasons.push("Long-term injury return — managed minutes only");
+    } else if (comePen > 0.25) {
+      score -= 6;
       reasons.push("Returning from long injury");
     } else {
       reasons.push("Still finding sharpness");
     }
     if ((player.state as any).comebackCaution) {
-      score -= 4;
+      score -= 6;
       reasons.push("Medical staff urge caution");
     }
   }
