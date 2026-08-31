@@ -88,10 +88,11 @@ function pickDefinition(rng: RNG, player: Player, world: World): InjuryDefinitio
 }
 
 function initialComebackPenalty(severity: InjurySeverity, daysOut: number): number {
-  const lengthFactor = Math.min(1, daysOut / 90);
-  if (severity === "Severe") return Math.min(0.55, 0.28 + lengthFactor * 0.3);
-  if (severity === "Moderate") return Math.min(0.38, 0.14 + lengthFactor * 0.22);
-  return Math.min(0.18, 0.05 + lengthFactor * 0.12);
+  // Longer absences + severity → bigger rust (feels real after long layoffs)
+  const lengthFactor = Math.min(1, daysOut / 75);
+  if (severity === "Severe") return Math.min(0.62, 0.32 + lengthFactor * 0.32);
+  if (severity === "Moderate") return Math.min(0.44, 0.16 + lengthFactor * 0.26);
+  return Math.min(0.22, 0.06 + lengthFactor * 0.14);
 }
 
 export function createInjury(
@@ -155,23 +156,25 @@ function applyComebackDip(world: World, player: Player, injury: Injury): void {
   injury.returnedDate = world.calendar.currentDate;
   injury.minutesSinceReturn = 0;
 
+  // Fitness / sharpness / form: not fully restored — scale with severity
   if (injury.severity === "Severe") {
-    player.state.fitness = Math.min(72, Math.max(45, player.state.fitness + 18));
-    player.state.sharpness = Math.max(25, Math.min(55, player.state.sharpness * 0.45));
-    player.state.form = Math.max(20, player.state.form - 12 - pen * 20);
-    player.state.morale = Math.min(100, player.state.morale + 3);
+    player.state.fitness = Math.min(68, Math.max(40, player.state.fitness + 15));
+    player.state.sharpness = Math.max(20, Math.min(48, player.state.sharpness * 0.38));
+    player.state.form = Math.max(18, player.state.form - 16 - pen * 22);
+    player.state.morale = Math.min(100, player.state.morale + 2);
   } else if (injury.severity === "Moderate") {
-    player.state.fitness = Math.min(82, Math.max(55, player.state.fitness + 22));
-    player.state.sharpness = Math.max(35, Math.min(65, player.state.sharpness * 0.6));
-    player.state.form = Math.max(25, player.state.form - 7 - pen * 15);
-    player.state.morale = Math.min(100, player.state.morale + 5);
+    player.state.fitness = Math.min(78, Math.max(50, player.state.fitness + 18));
+    player.state.sharpness = Math.max(30, Math.min(58, player.state.sharpness * 0.52));
+    player.state.form = Math.max(22, player.state.form - 10 - pen * 18);
+    player.state.morale = Math.min(100, player.state.morale + 4);
   } else {
-    player.state.fitness = Math.min(92, player.state.fitness + 20);
-    player.state.sharpness = Math.max(50, Math.min(80, player.state.sharpness * 0.85));
-    player.state.form = Math.max(30, player.state.form - 3 - pen * 8);
+    player.state.fitness = Math.min(90, player.state.fitness + 18);
+    player.state.sharpness = Math.max(48, Math.min(78, player.state.sharpness * 0.8));
+    player.state.form = Math.max(28, player.state.form - 5 - pen * 10);
     player.state.morale = Math.min(100, player.state.morale + 4);
   }
 
+  // Soft selection caution flag for AI managers
   (player.state as any).comebackCaution = true;
 
   world.events.emit(Events.INJURY_OCCURRED, {
@@ -197,6 +200,7 @@ export function tickInjuries(world: World): void {
       continue;
     }
 
+    // Residual comeback decay (even without matches — training / time)
     if (injury.comebackPenalty > 0.01) {
       const dailyDecay =
         injury.severity === "Severe"
@@ -208,6 +212,7 @@ export function tickInjuries(world: World): void {
 
       const player = world.players.get(injury.playerId);
       if (player && injury.comebackPenalty > 0) {
+        // Gradual sharpness recovery while penalty remains
         player.state.sharpness = Math.min(95, player.state.sharpness + 0.6);
         player.state.fitness = Math.min(100, player.state.fitness + 0.4);
       }
@@ -225,6 +230,7 @@ export function tickInjuries(world: World): void {
   }
 }
 
+/** Latest non-active injury still carrying a comeback penalty */
 export function getComebackInjury(world: World, playerId: EntityId): Injury | null {
   const player = world.players.get(playerId);
   if (!player) return null;
@@ -244,12 +250,22 @@ export function getComebackPenalty(world: World, playerId: EntityId): number {
 }
 
 /**
- * Multiplier applied to effective ability / match rating contribution (0.7–1.0).
+ * Multiplier applied to effective ability / match rating contribution.
+ * First 45–90' after return carry extra rust.
  */
 export function comebackPerformanceMultiplier(world: World, playerId: EntityId): number {
-  const pen = getComebackPenalty(world, playerId);
-  if (pen <= 0) return 1;
-  return Math.max(0.7, 1 - pen * 0.55);
+  const inj = getComebackInjury(world, playerId);
+  if (!inj || inj.comebackPenalty <= 0) return 1;
+  const pen = inj.comebackPenalty;
+  // Base rust: severe can cut ~30–35% early on
+  let mul = Math.max(0.65, 1 - pen * 0.6);
+  // Extra first-match rust until they've played meaningful minutes
+  if (inj.minutesSinceReturn < 45) {
+    mul *= 0.92;
+  } else if (inj.minutesSinceReturn < 90) {
+    mul *= 0.96;
+  }
+  return Math.max(0.62, mul);
 }
 
 /**
@@ -268,10 +284,13 @@ export function registerComebackMinutes(
     const inj = world.injuries.get(id);
     if (!inj || inj.active || inj.comebackPenalty <= 0) continue;
     inj.minutesSinceReturn += minutes;
-    const burn = (minutes / 90) * (0.12 + inj.comebackPenalty * 0.08);
+    // Every 90' burns ~10–16% of remaining penalty (match minutes > pure rest)
+    const burn = (minutes / 90) * (0.1 + inj.comebackPenalty * 0.1);
     inj.comebackPenalty = Math.max(0, inj.comebackPenalty - burn);
-    player.state.sharpness = Math.min(100, player.state.sharpness + minutes * 0.08);
-    player.state.fitness = Math.min(100, player.state.fitness + minutes * 0.05);
+    player.state.sharpness = Math.min(100, player.state.sharpness + minutes * 0.1);
+    player.state.fitness = Math.min(100, player.state.fitness + minutes * 0.06);
+    // Form climbs slowly with real minutes, not rest alone
+    player.state.form = Math.min(100, player.state.form + minutes * 0.04);
   }
 }
 
