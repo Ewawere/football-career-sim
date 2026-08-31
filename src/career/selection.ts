@@ -8,7 +8,7 @@ import type { World } from "../world/world.js";
 import type { Player } from "../players/player.js";
 import type { Club } from "../clubs/club.js";
 import type { SelectionRole } from "./player-career.js";
-import { getActiveInjury } from "../injuries/engine.js";
+import { getActiveInjury, getComebackPenalty } from "../injuries/engine.js";
 
 export interface DepthChartEntry {
   playerId: EntityId;
@@ -29,6 +29,7 @@ export interface SelectionContext {
  * Higher = more likely to start.
  */
 export function selectionScore(
+  world: World,
   player: Player,
   targetPosition: Position,
   matchImportance: number = 0.5
@@ -36,11 +37,9 @@ export function selectionScore(
   const reasons: string[] = [];
   let score = 0;
 
-  // Base ability
   score += player.ovr * 1.0;
   reasons.push(`OVR ${player.ovr}`);
 
-  // Position suitability
   if (player.primaryPosition === targetPosition) {
     score += 12;
     reasons.push("Primary position");
@@ -52,7 +51,6 @@ export function selectionScore(
     reasons.push("Out of position");
   }
 
-  // Form (0-100) — stronger weight so hot/cold streaks change XI
   const formMod = (player.state.form - 50) * 0.38;
   score += formMod;
   if (player.state.form >= 75) {
@@ -65,7 +63,6 @@ export function selectionScore(
     reasons.push(`Form ${player.state.form.toFixed(0)}`);
   }
 
-  // Fitness
   if (player.state.fitness < 50) {
     score -= 28;
     reasons.push("Low fitness");
@@ -76,13 +73,26 @@ export function selectionScore(
     score += (player.state.fitness - 80) * 0.12;
   }
 
-  // Sharpness
   score += (player.state.sharpness - 70) * 0.1;
+  const comePen = getComebackPenalty(world, player.id);
+  if (comePen > 0.05) {
+    score -= comePen * 28;
+    if (comePen > 0.35) {
+      score -= 8;
+      reasons.push("Long-term injury return — managed minutes");
+    } else if (comePen > 0.2) {
+      reasons.push("Returning from long injury");
+    } else {
+      reasons.push("Still finding sharpness");
+    }
+    if ((player.state as any).comebackCaution) {
+      score -= 4;
+      reasons.push("Medical staff urge caution");
+    }
+  }
 
-  // Morale
   score += (player.state.morale - 50) * 0.14;
 
-  // Recent performance (season avg rating 0-100 scale)
   if (player.state.ratingCount >= 2) {
     const avg = player.state.averageRatingThisSeason;
     score += (avg - 60) * 0.22;
@@ -97,19 +107,15 @@ export function selectionScore(
     }
   }
 
-  // Age: slight preference for peak years in important matches
   if (matchImportance > 0.7) {
     if (player.age >= 24 && player.age <= 29) score += 3;
     if (player.age <= 18) score -= 4;
   } else {
-    // Rotate youth in lesser games
     if (player.age <= 20) score += 2;
   }
 
-  // Reputation mild
   score += player.reputation * 0.05;
 
-  // Manager trust — underperformers get frozen out
   const trust = player.state.managerTrust ?? 50;
   if (trust < 30) {
     score -= 18;
@@ -121,7 +127,6 @@ export function selectionScore(
     score += 4;
   }
 
-  // Transfer-listed players deprioritised for starts
   if ((player.state as any).transferListed) {
     score -= 12;
     reasons.push("Transfer listed");
@@ -161,7 +166,7 @@ export function getDepthChart(
   }
 
   const scored = candidates.map((p) => {
-    const { score, reasons } = selectionScore(p, position, matchImportance);
+    const { score, reasons } = selectionScore(world, p, position, matchImportance);
     return { player: p, score, reasons };
   });
 
