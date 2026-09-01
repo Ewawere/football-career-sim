@@ -1,0 +1,7 @@
+/**
+ * Shell extras - landscape-first. Never constrain to phone portrait width.
+ */
+html, body, #app {
+  max-width: none !important;
+  width: 100% !important;
+}
