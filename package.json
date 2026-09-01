@@ -1,7 +1,7 @@
 {
   "name": "football-career-sim",
   "version": "0.1.0",
-  "description": "Original deep football career simulator – mobile-first, simulation-first",
+  "description": "Original deep football career simulator \u2013 mobile-first, simulation-first",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
@@ -22,17 +22,21 @@
     "export:match": "tsx src/cli/export-match-ui.ts",
     "test:massive": "tsx src/tests/massive-sim.ts",
     "test:massive:long": "tsx src/tests/massive-sim.ts --seasons=12",
-    "play:web": "tsx src/ui/server.ts"
+    "play:web": "tsx src/ui/server.ts",
+    "start": "tsx src/ui/server.ts"
   },
-  "keywords": ["football", "soccer", "career", "simulation", "manager"],
+  "keywords": [
+    "football",
+    "soccer",
+    "career",
+    "simulation",
+    "manager"
+  ],
   "author": "Football Career Sim Team",
   "license": "UNLICENSED",
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
-  },
-  "engines": {
-    "node": ">=20"
   }
 }
