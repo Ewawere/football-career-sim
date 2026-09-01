@@ -1,8 +1,14 @@
 FROM node:20-alpine
 WORKDIR /app
+
+# Install ALL deps (tsx is required at runtime)
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev=false
+RUN npm install
+
 COPY . .
-ENV PORT=3847
-EXPOSE 3847
+
+# Railway injects PORT at runtime
+ENV NODE_ENV=production
+EXPOSE 8080
+
 CMD ["npx", "tsx", "src/ui/server.ts"]
