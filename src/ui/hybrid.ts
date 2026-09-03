@@ -13,6 +13,12 @@ import { openNegotiation, respondNegotiation, snapshotNegotiation } from "../car
 import { snapshotRoles, setPlayerRole } from "../career/player-roles.js";
 import type { PlayerRoleId, MatchInstructionId } from "../career/player-roles.js";
 import { snapshotThreads } from "../narrative/engine.js";
+import {
+  acceptJobOffer,
+  declineJobOffer,
+  snapshotJobOffers,
+  generateJobOffers,
+} from "../managers/career.js";
 import { spendSkillPointTowardPlayStyle, getSkillPoints } from "../players/skill-points.js";
 import { getPlayerPlayStyles } from "../players/playstyles.js";
 
@@ -32,7 +38,6 @@ export function getHybridHub(session: GameSession) {
   const briefing = safe(() => getPreMatchBriefing(w), null);
   const postMatch = safe(() => getPostMatchPack(w), null);
 
-  // Normalize player card fields for UI
   const player = base.player
     ? {
         ...base.player,
@@ -54,6 +59,7 @@ export function getHybridHub(session: GameSession) {
     medical: safe(() => getMedicalCentre(w), null),
     negotiation: safe(() => snapshotNegotiation(w), null),
     roles: safe(() => snapshotRoles(w), null),
+    jobOffers: safe(() => snapshotJobOffers(w), []),
   };
 }
 
@@ -118,4 +124,32 @@ export function spendPlayStylePoint(session: GameSession, playStyleId: string) {
   } catch (e: any) {
     return { ok: false, message: String(e?.message ?? e) };
   }
+}
+
+export function listJobOffersApi(session: GameSession) {
+  try {
+    generateJobOffers(session.world);
+  } catch {
+    /* ignore */
+  }
+  return { offers: snapshotJobOffers(session.world) };
+}
+
+export function takeJobApi(session: GameSession, offerId: string) {
+  const ok = acceptJobOffer(session.world, offerId);
+  return { ok, hub: getHybridHub(session), offers: snapshotJobOffers(session.world) };
+}
+
+export function declineJobApi(session: GameSession, offerId?: string) {
+  const ok = declineJobOffer(session.world, offerId);
+  return { ok, hub: getHybridHub(session), offers: snapshotJobOffers(session.world) };
+}
+
+export function refreshJobOffersApi(session: GameSession) {
+  const offers = generateJobOffers(session.world);
+  return {
+    count: offers.length,
+    offers: snapshotJobOffers(session.world),
+    hub: getHybridHub(session),
+  };
 }
