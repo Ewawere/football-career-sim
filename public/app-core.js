@@ -85,12 +85,7 @@ function renderSquad(ms) {
         (x) =>
           `<div class="panel">${x.isUser ? "★ " : ""}${x.name} <span class="pill">${x.position}</span> ${x.ovr}</div>`
       )
-      .join("")}</div>
-    ${(ms.bench || []).length
-      ? `<div class="muted" style="margin-top:8px">Bench: ${ms.bench
-          .map((b) => b.name)
-          .join(", ")}</div>`
-      : ""}</div>`;
+      .join("")}</div></div>`;
 }
 
 function renderRoles(roles) {
@@ -100,17 +95,41 @@ function renderRoles(roles) {
       .map((r) => `<button data-action="set-role" data-role="${r.id}">${r.label}</button> `)
       .join("")}</div>
     <div style="margin-top:8px">${(roles.instructions || [])
-      .map(
-        (i) =>
-          `<button data-action="set-role" data-instruction="${i.id}">${i.label}</button> `
-      )
+      .map((i) => `<button data-action="set-role" data-instruction="${i.id}">${i.label}</button> `)
       .join("")}</div></div>`;
 }
 
 function renderMedical(med) {
   if (!med) return "";
-  return `<div class="card"><h3>Medical centre</h3>
-    <pre style="white-space:pre-wrap;font-size:12px;opacity:.9">${JSON.stringify(med, null, 2)}</pre></div>`;
+  const tone =
+    med.statusTone === "bad" ? "bad" : med.statusTone === "warn" ? "warn" : "ok";
+  return `<div class="card"><h3>Medical · <span class="pill">${med.statusLabel || ""}</span></h3>
+    <div class="grid-3">
+      <div><span class="pill">Fitness</span> ${med.fitness ?? "-"}</div>
+      <div><span class="pill">Rust</span> ${med.comebackPenalty ?? 0}%</div>
+      <div><span class="pill">Re-injury</span> ${med.recurrenceRisk ?? 0}%</div>
+    </div>
+    ${med.active ? `<div class="panel" style="margin-top:8px"><strong>${med.active.name}</strong> · ${med.active.phase?.label || ""}<div class="muted">${med.active.daysRemaining}d left · ${med.active.phase?.detail || ""}</div></div>` : ""}
+    <ul>${(med.notes || []).map((n) => `<li>${n}</li>`).join("")}</ul></div>`;
+}
+
+function renderNegotiation(neg) {
+  const n = neg || {};
+  return `<div class="card"><h3>Contract</h3>
+    <div class="muted">${n.currentWageWeekly || ""} · ends ${n.endDate || "-"}</div>
+    <div class="grid-2" style="margin-top:8px">
+      <div class="panel">Demand ${n.demandedLabel || "-"}</div>
+      <div class="panel">Offer ${n.offeredLabel || "-"}</div>
+    </div>
+    <div class="muted" style="margin-top:6px">${n.agentNote || n.clubNote || ""}</div>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn" data-action="neg-open">Open talks</button>
+      <button data-action="neg-respond" data-neg="accept">Accept</button>
+      <button data-action="neg-respond" data-neg="counter">Counter</button>
+      <button data-action="neg-respond" data-neg="mediate">Agent mediate</button>
+      <button data-action="neg-respond" data-neg="reject">Walk away</button>
+    </div>
+    ${n.lastMessage ? `<p class="muted">${n.lastMessage}</p>` : ""}</div>`;
 }
 
 function renderBriefing() {
@@ -143,7 +162,6 @@ function renderHub() {
       <button data-action="match-start">Play match</button>
       <button data-action="match-finish">Finish match</button>
       <button data-action="save">Save</button>
-      <button data-action="neg-open">Contract</button>
     </div>
   </div>
   ${renderBriefing()}
@@ -152,21 +170,19 @@ function renderHub() {
   ${renderSquad(hub.matchdaySquad)}
   ${renderRoles(hub.roles)}
   ${renderMedical(hub.medical)}
+  ${renderNegotiation(hub.negotiation)}
   `;
 }
 
 function renderNews(items) {
-  if (!items || !items.length) return '<div class="card"><h3>News</h3><p class="muted">No stories yet - advance the calendar.</p></div>';
+  if (!items || !items.length)
+    return '<div class="card"><h3>News</h3><p class="muted">No stories yet - advance the calendar.</p></div>';
   return `<div class="card"><h3>News</h3>${items
     .map(
       (n) => `<div class="panel news-card" style="margin:10px 0">
       <strong>${n.headline || ""}</strong>
       <div class="muted">${n.category || ""} · ${n.importance || ""}</div>
       <p>${n.body || ""}</p>
-      <div class="reactions">
-        <button data-action="like-news">Like</button>
-        <button data-action="react-news">🔥</button>
-      </div>
     </div>`
     )
     .join("")}</div>`;
@@ -194,4 +210,3 @@ window.refresh = refresh;
 window.setView = setView;
 window.toast = toast;
 window.$ = $;
-window.hub = () => hub;
