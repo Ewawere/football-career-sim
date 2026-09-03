@@ -1,5 +1,5 @@
 /**
- * Medical centre — active injury timeline + recovery phases (FM medical).
+ * Medical centre - active injury timeline + recovery phases (FM medical).
  */
 
 import type { World } from "../world/world.js";
