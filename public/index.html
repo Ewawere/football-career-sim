@@ -3,51 +3,57 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Football Career Sim</title>
+  <title>Career Mode</title>
   <link rel="stylesheet" href="/mockup-ui.css" />
   <link rel="stylesheet" href="/mobile-shell.css" />
-  <style>
-    #toast { position: fixed; bottom: 20px; right: 20px; background: #134e4a; color: #fff; padding: 10px 14px; border-radius: 10px; opacity: 0; transition: opacity .2s; z-index: 50; }
-    #toast.show { opacity: 1; }
-    #gate, #app { padding: 16px; }
-    #gate.hidden, #app.hidden { display: none; }
-    .side-nav { display: flex; flex-direction: column; gap: 6px; }
-  </style>
 </head>
 <body>
   <div id="toast"></div>
+
   <div id="gate">
-    <div class="card" style="max-width:480px;margin:40px auto">
-      <h1>Football Career Sim</h1>
-      <p class="muted">Hybrid FM + EA FC career</p>
-      <label>First name <input id="firstName" value="Alex" /></label><br/><br/>
-      <label>Last name <input id="lastName" value="Player" /></label><br/><br/>
-      <label>Position
-        <select id="position">
-          <option>ST</option><option>RW</option><option>LW</option>
-          <option selected>CM</option><option>CDM</option><option>CAM</option>
-          <option>CB</option><option>LB</option><option>RB</option><option>GK</option>
-        </select>
-      </label><br/><br/>
-      <button id="startCareer" class="btn">Start career</button>
+    <div class="card" style="max-width:520px;margin:48px auto">
+      <div class="row-between">
+        <div>
+          <div class="pill">CAREER MODE</div>
+          <h1 style="margin-top:10px">Create Player</h1>
+          <p class="muted">EA FC presentation · FM depth</p>
+        </div>
+        <div class="face-ring">FC</div>
+      </div>
+      <div style="margin-top:18px">
+        <label>First name<input id="firstName" value="Alex" /></label>
+        <label>Last name<input id="lastName" value="Vale" /></label>
+        <label>Position
+          <select id="position">
+            <option>ST</option><option selected>RW</option><option>LW</option>
+            <option>CAM</option><option>CM</option><option>CDM</option>
+            <option>CB</option><option>LB</option><option>RB</option><option>GK</option>
+          </select>
+        </label>
+        <div class="actions">
+          <button id="startCareer" class="btn">Start Career</button>
+        </div>
+      </div>
     </div>
   </div>
+
   <div id="app" class="hidden shell">
-    <nav id="sideNav" class="side-nav card">
+    <nav id="sideNav" class="card">
+      <div class="pill" style="margin-bottom:10px">CAREER</div>
       <button data-view="hub" class="active">Hub</button>
       <button data-view="news">News</button>
       <button data-view="hub">Squad</button>
-      <button data-view="hub">More</button>
+      <button data-view="hub">Inbox</button>
     </nav>
     <main>
       <div id="content"></div>
-      <nav id="bottomNav" class="card" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <nav id="bottomNav" class="card">
         <button data-view="hub" class="active">Hub</button>
         <button data-view="news">News</button>
       </nav>
     </main>
   </div>
-  <script src="/app-views-a3.js"></script>
+
   <script src="/app-core.js"></script>
   <script src="/app-boot.js"></script>
 </body>
