@@ -1,11 +1,9 @@
 /**
  * Event-driven career inbox - hybrid FM mail + FC clarity.
- * Messages are generated from world state / recent events, not static copy.
  */
 
 import { nextId } from "../core/id.js";
 import type { World } from "../world/world.js";
-import type { Player } from "../players/player.js";
 import { getPlayerPlayStyles, getPlayStyleDef } from "../players/playstyles.js";
 
 export interface InboxMessage {
@@ -57,7 +55,7 @@ export function syncInboxFromState(world: World): void {
     pushUnique(world, `mgr-high-${season}-${Math.floor(apps / 5)}`, {
       from: "Manager",
       subject: "Keep going",
-      body: `You're earning the shirt at ${clubName}. Trust is high (${trust}). Stay sharp in training and available - I need reliable performers when the fixtures tighten.`,
+      body: `You're earning the shirt at ${clubName}. Trust is high (${trust}). Stay sharp in training and available.`,
       date,
       priority: "normal",
       tags: ["manager", "trust"],
@@ -66,19 +64,10 @@ export function syncInboxFromState(world: World): void {
     pushUnique(world, `mgr-low-${season}-${Math.floor(apps / 3)}`, {
       from: "Manager",
       subject: "Standards",
-      body: `Selection is not a right. Trust is at ${trust}. Improve form, hit training hard, and deliver when you get minutes. The door closes quickly at this level.`,
+      body: `Selection is not a right. Trust is at ${trust}. Improve form and discipline before asking for more minutes.`,
       date,
       priority: "high",
-      tags: ["manager", "warning"],
-    });
-  } else if (apps === 0) {
-    pushUnique(world, `mgr-wait-${season}`, {
-      from: "Manager",
-      subject: "Patience and preparation",
-      body: `You're in the group at ${clubName}. Minutes will come when fitness, form and the tactical plan line up. Be ready when the call comes.`,
-      date,
-      priority: "normal",
-      tags: ["manager"],
+      tags: ["manager", "trust"],
     });
   }
 
@@ -86,73 +75,73 @@ export function syncInboxFromState(world: World): void {
     pushUnique(world, `mgr-form-${season}-${Math.floor(apps / 4)}`, {
       from: "Manager",
       subject: "In form",
-      body: `Your recent form (${form}) is being noticed. Keep the level and the shirt stays yours more often.`,
+      body: `Your form (${form}) is hard to ignore. Keep delivering and the XI stays open.`,
       date,
       priority: "normal",
       tags: ["manager", "form"],
     });
-  } else if (form < 35 && apps >= 2) {
+  } else if (form <= 35 && apps >= 2) {
     pushUnique(world, `mgr-cold-${season}-${Math.floor(apps / 3)}`, {
       from: "Manager",
-      subject: "Need a response",
-      body: `Form is cold (${form}). Training standards and match focus have to rise. I select on evidence.`,
+      subject: "Need more",
+      body: `Form at ${form} is not enough. Reset in training - rotation is coming if this continues.`,
       date,
       priority: "high",
       tags: ["manager", "form"],
     });
   }
 
-  if (apps >= 10 && trust >= 55) {
-    pushUnique(world, `agent-base-${season}`, {
-      from: "Agent",
-      subject: "Career path",
-      body: `I'm tracking your minutes and reputation. We push for a new deal or loan only if the path at ${clubName} dies. For now: train, stay fit, stack performances.`,
-      date,
-      priority: "low",
-      tags: ["agent"],
-    });
-  }
+  pushUnique(world, `agent-base-${season}`, {
+    from: "Agent",
+    subject: "Career path",
+    body: `I'm tracking your minutes and reputation. We push for a new deal or loan only if the path at ${clubName} dies. For now: train, stay fit, stack performances.`,
+    date,
+    priority: "low",
+    tags: ["agent"],
+  });
 
   if (fitness < 55) {
     pushUnique(world, `med-fit-${date}`, {
       from: "Medical",
       subject: "Load management",
-      body: `Fitness is sitting at ${fitness}. We're flagging reduced intensity in training and monitoring for soft-tissue risk. Communicate any niggles early.`,
+      body: `Fitness is sitting at ${fitness}. We're flagging reduced intensity in training and monitoring for soft-tissue risk.`,
       date,
       priority: "high",
       tags: ["medical"],
     });
   }
 
-  const ps = getPlayerPlayStyles(player);
-  if (ps.unlocked.length === 0) {
-    pushUnique(world, `sys-ps-${season}`, {
-      from: "System",
-      subject: "PlayStyles",
-      body: `Train specific attributes to unlock PlayStyles. Skill points can accelerate a near unlock. Equipped styles influence match contribution - build a unique profile, don't stack everything.`,
-      date,
-      priority: "low",
-      tags: ["system", "playstyles"],
-    });
-  } else if (ps.equipped.length) {
-    const names = ps.equipped
-      .map((id) => getPlayStyleDef(id)?.name ?? id)
-      .join(", ");
-    pushUnique(world, `sys-eq-${season}-${ps.equipped.join(",")}`, {
-      from: "System",
-      subject: "Styles equipped",
-      body: `Active PlayStyles: ${names}. You'll see them reflected in match ratings and post-match notes when they contribute.`,
-      date,
-      priority: "low",
-      tags: ["system", "playstyles"],
-    });
+  try {
+    const ps = getPlayerPlayStyles(player);
+    if (ps.unlocked.length === 0) {
+      pushUnique(world, `sys-ps-${season}`, {
+        from: "System",
+        subject: "PlayStyles",
+        body: `Train specific attributes to unlock PlayStyles. Skill points can accelerate a near unlock.`,
+        date,
+        priority: "low",
+        tags: ["system", "playstyles"],
+      });
+    } else if (ps.equipped.length) {
+      const names = ps.equipped.map((id) => getPlayStyleDef(id)?.name ?? id).join(", ");
+      pushUnique(world, `sys-eq-${season}-${ps.equipped.join(",")}`, {
+        from: "System",
+        subject: "Styles equipped",
+        body: `Active PlayStyles: ${names}.`,
+        date,
+        priority: "low",
+        tags: ["system", "playstyles"],
+      });
+    }
+  } catch {
+    /* playstyles optional at boot */
   }
 
-  if (player.state.goalsThisSeason >= 5) {
+  if ((player.state.goalsThisSeason ?? 0) >= 5) {
     pushUnique(world, `media-goals-${season}-5`, {
       from: "Media",
       subject: "Press interest",
-      body: `Your goal tally is generating local coverage. Expect more questions after matches - answers can shift reputation and trust. Stay measured.`,
+      body: `Your goal tally is generating local coverage. Expect more questions after matches.`,
       date,
       priority: "normal",
       tags: ["media"],
