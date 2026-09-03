@@ -1,5 +1,5 @@
 /**
- * Career Mode UI core - FM density + EA FC presentation
+ * Career Mode UI core - hybrid hub (FM + EA FC)
  */
 const $ = (id) => document.getElementById(id);
 
@@ -29,18 +29,9 @@ function toast(msg) {
 function setView(v) {
   view = v;
   document.querySelectorAll("#sideNav button, #bottomNav button").forEach((b) => {
-    const dv = b.getAttribute("data-view");
-    b.classList.toggle("active", dv === v);
+    b.classList.toggle("active", b.getAttribute("data-view") === v);
   });
   render();
-}
-
-function fmtVal(n) {
-  if (n == null) return "-";
-  if (typeof n === "string") return n;
-  if (n >= 1e6) return "EUR " + (n / 1e6).toFixed(1) + "m";
-  if (n >= 1e3) return "EUR " + Math.round(n / 1e3) + "k";
-  return "EUR " + n;
 }
 
 async function refresh() {
@@ -49,89 +40,153 @@ async function refresh() {
   return hub;
 }
 
-function renderHub() {
-  if (!hub) return "<div class=\"card\">Loading...</div>";
-  const p = hub.player || {};
-  const obj = window.renderObjectives ? window.renderObjectives(hub.objectives) : "";
-  const inbox = window.renderInbox ? window.renderInbox(hub.inbox) : "";
-  const medical = hub.medical
-    ? `<div class="card"><h3>Medical</h3><pre style="white-space:pre-wrap;font-size:12px">${JSON.stringify(hub.medical, null, 2)}</pre></div>`
-    : "";
-  const squad = hub.matchdaySquad
-    ? `<div class="card"><h3>Matchday squad (${hub.matchdaySquad.formation || ""})</h3>
-        <p class="muted">${hub.matchdaySquad.user?.standing || ""}</p>
-        <div class="grid-2">${(hub.matchdaySquad.xi || [])
-          .map(
-            (x) =>
-              `<div class="panel">${x.isUser ? "★ " : ""}${x.name} <span class="pill">${x.position}</span> ${x.ovr}</div>`
-          )
-          .join("")}</div></div>`
-    : "";
-  const roles = hub.roles
-    ? `<div class="card"><h3>Role & instructions</h3>
-        <p>${hub.roles.roleLabel || ""} · ${hub.roles.instructionLabel || ""}</p>
-        <div>${(hub.roles.availableRoles || [])
-          .map(
-            (r) =>
-              `<button data-action="set-role" data-role="${r.id}">${r.label}</button> `
-          )
-          .join("")}</div>
-        <div style="margin-top:8px">${(hub.roles.instructions || [])
-          .map(
-            (i) =>
-              `<button data-action="set-role" data-instruction="${i.id}">${i.label}</button> `
-          )
-          .join("")}</div></div>`
-    : "";
-  const neg = hub.negotiation
-    ? `<div class="card"><h3>Contract</h3>
-        <button class="btn" data-action="neg-open">Open negotiation</button>
-        <button data-action="neg-respond" data-neg="accept">Accept</button>
-        <button data-action="neg-respond" data-neg="counter">Counter</button>
-        <button data-action="neg-respond" data-neg="mediate">Mediate</button>
-        <pre style="font-size:12px">${JSON.stringify(hub.negotiation, null, 2)}</pre></div>`
-    : `<div class="card"><button class="btn" data-action="neg-open">Open negotiation</button></div>`;
+function renderObjectives(obj) {
+  if (!obj || !obj.objectives || !obj.objectives.length) {
+    return `<div class="card"><h3>Season objectives</h3><p class="muted">Will appear once the season is active.</p></div>`;
+  }
+  return `<div class="card"><h3>Season objectives · ${obj.completed || 0}/${obj.total || 0}</h3>
+    <div class="muted">${obj.progress || 0}% · claim SP when complete</div>
+    ${(obj.objectives || [])
+      .map(
+        (o) => `<div class="panel" style="margin:8px 0">
+      <strong>${o.label}</strong>
+      <div class="muted">${o.description || ""}</div>
+      <div>${o.current}/${o.target} ${o.unit || ""} · +${o.rewardSp || 0} SP</div>
+      <button class="btn" data-action="claim-obj" data-id="${o.id}" ${!o.completed || o.claimed ? "disabled" : ""}>
+        ${o.claimed ? "Claimed" : o.completed ? "Claim" : (o.pct || 0) + "%"}
+      </button></div>`
+      )
+      .join("")}</div>`;
+}
 
-  return `
-    <div class="card match-poster">
-      <h2>${p.name || "Player"} · ${p.ovr ?? ""} OVR</h2>
-      <div class="muted">${p.position || ""} · Age ${p.age ?? ""} · ${p.club || ""}</div>
-      <div class="grid-3" style="margin-top:12px">
-        <div><span class="pill">Form</span> ${p.form ?? "-"}</div>
-        <div><span class="pill">Fitness</span> ${p.fitness ?? "-"}</div>
-        <div><span class="pill">Trust</span> ${p.trust ?? p.managerTrust ?? "-"}</div>
-      </div>
-      <div style="margin-top:14px">
-        <button class="btn" data-action="advance">Advance matchday</button>
-        <button data-action="train" data-focus="Tactical">Train</button>
-        <button data-action="match-start">Play match</button>
-        <button data-action="save">Save</button>
-      </div>
+function renderInbox(inbox) {
+  const msgs = (inbox && inbox.messages) || [];
+  return `<div class="card"><h3>Inbox ${inbox && inbox.unread ? "(" + inbox.unread + " unread)" : ""}</h3>
+    ${msgs.length
+      ? msgs
+          .map(
+            (m) => `<div class="panel" style="margin:8px 0;opacity:${m.read ? 0.65 : 1}">
+        <strong>${m.from || "Club"}</strong> · ${m.subject || ""}
+        <div class="muted">${m.body || ""}</div>
+        ${!m.read ? `<button data-action="inbox-read" data-id="${m.id}">Mark read</button>` : ""}
+      </div>`
+          )
+          .join("")
+      : '<p class="muted">No messages</p>'}</div>`;
+}
+
+function renderSquad(ms) {
+  if (!ms) return "";
+  const xi = ms.xi || [];
+  return `<div class="card"><h3>Matchday · ${ms.formation || ""}</h3>
+    <p class="muted">${(ms.user && ms.user.standing) || ""}</p>
+    <div class="grid-2">${xi
+      .map(
+        (x) =>
+          `<div class="panel">${x.isUser ? "★ " : ""}${x.name} <span class="pill">${x.position}</span> ${x.ovr}</div>`
+      )
+      .join("")}</div>
+    ${(ms.bench || []).length
+      ? `<div class="muted" style="margin-top:8px">Bench: ${ms.bench
+          .map((b) => b.name)
+          .join(", ")}</div>`
+      : ""}</div>`;
+}
+
+function renderRoles(roles) {
+  if (!roles) return "";
+  return `<div class="card"><h3>Role · ${roles.roleLabel || ""} / ${roles.instructionLabel || ""}</h3>
+    <div>${(roles.availableRoles || [])
+      .map((r) => `<button data-action="set-role" data-role="${r.id}">${r.label}</button> `)
+      .join("")}</div>
+    <div style="margin-top:8px">${(roles.instructions || [])
+      .map(
+        (i) =>
+          `<button data-action="set-role" data-instruction="${i.id}">${i.label}</button> `
+      )
+      .join("")}</div></div>`;
+}
+
+function renderMedical(med) {
+  if (!med) return "";
+  return `<div class="card"><h3>Medical centre</h3>
+    <pre style="white-space:pre-wrap;font-size:12px;opacity:.9">${JSON.stringify(med, null, 2)}</pre></div>`;
+}
+
+function renderBriefing() {
+  const b = hub && (hub.briefing || hub.preMatch);
+  if (!b) return "";
+  return `<div class="card"><h3>Pre-match briefing</h3>
+    <div class="grid-3">
+      <div><span class="pill">Form</span> ${b.form ?? "-"}</div>
+      <div><span class="pill">Fitness</span> ${b.fitness ?? "-"}</div>
+      <div><span class="pill">Trust</span> ${b.trust ?? "-"}</div>
     </div>
-    ${obj}${inbox}${squad}${roles}${medical}${neg}
+    <ul>${(b.tips || b.notes || []).map((t) => `<li>${t}</li>`).join("")}</ul></div>`;
+}
+
+function renderHub() {
+  if (!hub) return '<div class="card">Loading career hub...</div>';
+  const p = hub.player || {};
+  return `
+  <div class="card match-poster">
+    <h2>${p.name || p.displayName || "Player"} · ${p.ovr ?? ""} OVR</h2>
+    <div class="muted">${p.position || ""} · Age ${p.age ?? ""} · ${p.club || ""}</div>
+    <div class="grid-3" style="margin-top:12px">
+      <div><span class="pill">Form</span> ${p.form ?? "-"}</div>
+      <div><span class="pill">Fitness</span> ${p.fitness ?? "-"}</div>
+      <div><span class="pill">Trust</span> ${p.trust ?? p.managerTrust ?? "-"}</div>
+    </div>
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn" data-action="advance">Advance matchday</button>
+      <button data-action="train" data-focus="Tactical">Train</button>
+      <button data-action="match-start">Play match</button>
+      <button data-action="match-finish">Finish match</button>
+      <button data-action="save">Save</button>
+      <button data-action="neg-open">Contract</button>
+    </div>
+  </div>
+  ${renderBriefing()}
+  ${renderObjectives(hub.objectives)}
+  ${renderInbox(hub.inbox)}
+  ${renderSquad(hub.matchdaySquad)}
+  ${renderRoles(hub.roles)}
+  ${renderMedical(hub.medical)}
   `;
+}
+
+function renderNews(items) {
+  if (!items || !items.length) return '<div class="card"><h3>News</h3><p class="muted">No stories yet - advance the calendar.</p></div>';
+  return `<div class="card"><h3>News</h3>${items
+    .map(
+      (n) => `<div class="panel news-card" style="margin:10px 0">
+      <strong>${n.headline || ""}</strong>
+      <div class="muted">${n.category || ""} · ${n.importance || ""}</div>
+      <p>${n.body || ""}</p>
+      <div class="reactions">
+        <button data-action="like-news">Like</button>
+        <button data-action="react-news">🔥</button>
+      </div>
+    </div>`
+    )
+    .join("")}</div>`;
 }
 
 function render() {
   const content = $("content");
   if (!content) return;
-  if (view === "hub" || view === "overview") content.innerHTML = renderHub();
-  else if (view === "news") {
-    content.innerHTML = `<div class="card"><h3>News</h3><p class="muted">Loading feed...</p></div>`;
+  if (view === "news") {
+    content.innerHTML = '<div class="card">Loading news...</div>';
     api("/api/news")
       .then((d) => {
-        const items = d.news || [];
-        content.innerHTML = `<div class="card"><h3>News</h3>${items
-          .map(
-            (n) =>
-              `<div class="panel news-card" style="margin:10px 0"><strong>${n.headline}</strong><div class="muted">${n.body || ""}</div></div>`
-          )
-          .join("")}</div>`;
+        content.innerHTML = renderNews(d.news || []);
       })
-      .catch((e) => (content.innerHTML = `<div class="card">${e.message}</div>`));
-  } else {
-    content.innerHTML = renderHub();
+      .catch((e) => {
+        content.innerHTML = `<div class="card">${e.message}</div>`;
+      });
+    return;
   }
+  content.innerHTML = renderHub();
 }
 
 window.api = api;
@@ -139,3 +194,4 @@ window.refresh = refresh;
 window.setView = setView;
 window.toast = toast;
 window.$ = $;
+window.hub = () => hub;

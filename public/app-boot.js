@@ -1,44 +1,37 @@
-
 function bindBottomNav() {
   const nav = document.getElementById("bottomNav");
   if (!nav) return;
   nav.querySelectorAll("button[data-view]").forEach((btn) => {
     btn.onclick = () => setView(btn.getAttribute("data-view"));
   });
+  document.querySelectorAll("#sideNav button[data-view]").forEach((btn) => {
+    btn.onclick = () => setView(btn.getAttribute("data-view"));
+  });
 }
 
 function bindActions() {
-  document.querySelectorAll("[data-nav]").forEach((btn) => {
-    btn.onclick = () => setView(btn.getAttribute("data-nav"));
-  });
-  document.querySelectorAll("[data-news-filter]").forEach((btn) => {
-    btn.onclick = () => {
-      const f = btn.getAttribute("data-news-filter");
-      document.querySelectorAll("[data-news-filter]").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      document.querySelectorAll(".news-card").forEach((card) => {
-        const cat = card.getAttribute("data-news-cat") || "";
-        card.style.display = f === "all" || cat === f ? "" : "none";
-      });
-    };
-  });
-
   document.body.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-action]");
+    const t = e.target.closest("[data-action], [data-act]");
     if (!t) return;
-    const action = t.getAttribute("data-action");
+    const action = t.getAttribute("data-action") || t.getAttribute("data-act");
     try {
       if (action === "advance") {
         await api("/api/advance", { method: "POST", body: "{}" });
         await refresh();
+        toast("Matchday advanced");
       } else if (action === "train") {
         const focus = t.getAttribute("data-focus") || "Tactical";
         await api("/api/train", { method: "POST", body: JSON.stringify({ focus }) });
         await refresh();
-      } else if (action === "claim-obj") {
-        const id = t.getAttribute("data-id");
-        await api("/api/objectives/claim", { method: "POST", body: JSON.stringify({ objectiveId: id }) });
+        toast("Training complete");
+      } else if (action === "claim-obj" || action === "claimObj") {
+        const id = t.getAttribute("data-id") || t.getAttribute("data-oid");
+        await api("/api/objectives/claim", {
+          method: "POST",
+          body: JSON.stringify({ objectiveId: id }),
+        });
         await refresh();
+        toast("Objective claimed");
       } else if (action === "inbox-read") {
         const id = t.getAttribute("data-id");
         await api("/api/inbox/read", { method: "POST", body: JSON.stringify({ id }) });
@@ -46,9 +39,13 @@ function bindActions() {
       } else if (action === "neg-open") {
         await api("/api/negotiation/open", { method: "POST", body: "{}" });
         await refresh();
+        toast("Negotiation opened");
       } else if (action === "neg-respond") {
         const act = t.getAttribute("data-neg") || "mediate";
-        await api("/api/negotiation/respond", { method: "POST", body: JSON.stringify({ action: act }) });
+        await api("/api/negotiation/respond", {
+          method: "POST",
+          body: JSON.stringify({ action: act }),
+        });
         await refresh();
       } else if (action === "set-role") {
         const role = t.getAttribute("data-role");
@@ -58,27 +55,22 @@ function bindActions() {
           body: JSON.stringify({ role, instruction }),
         });
         await refresh();
+        toast("Role updated");
       } else if (action === "match-start") {
         await api("/api/match/start", { method: "POST", body: "{}" });
-        setView("match");
+        toast("Match started");
         await refresh();
       } else if (action === "match-finish") {
         await api("/api/match/finish", { method: "POST", body: "{}" });
         await refresh();
-      } else if (action === "season-end") {
-        await api("/api/season/end", { method: "POST", body: "{}" });
-        await refresh();
-      } else if (action === "season-next") {
-        await api("/api/season/next", { method: "POST", body: "{}" });
-        await refresh();
+        toast("Full time");
       } else if (action === "save") {
         await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
-      } else if (action === "like-news" || action === "react-news") {
-        t.classList.add("active");
+        toast("Saved");
       }
     } catch (err) {
       console.error(action, err);
-      alert(err.message || String(err));
+      toast(err.message || String(err));
     }
   });
 }
@@ -102,7 +94,7 @@ function boot() {
   bindBottomNav();
   bindActions();
   const startBtn = document.getElementById("startCareer");
-  if (startBtn) startBtn.onclick = () => startCareerFromGate().catch((e) => alert(e.message || e));
+  if (startBtn) startBtn.onclick = () => startCareerFromGate().catch((e) => toast(e.message || e));
   api("/api/status")
     .then((s) => {
       if (s?.careerStarted) {
