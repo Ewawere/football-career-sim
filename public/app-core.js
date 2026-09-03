@@ -1,15 +1,10 @@
 /**
- * Career Mode UI — FM density + EA FC presentation
+ * Career Mode UI core - FM density + EA FC presentation
  */
 const $ = (id) => document.getElementById(id);
 
 let hub = null;
-let press = null;
-let squad = null;
-let market = null;
-let matchStats = null;
-let clubSocial = null;
-let view = "overview";
+let view = "hub";
 
 async function api(path, opts) {
   const r = await fetch(path, {
@@ -25,6 +20,7 @@ async function api(path, opts) {
 
 function toast(msg) {
   const el = $("toast");
+  if (!el) return;
   el.textContent = msg;
   el.classList.add("show");
   setTimeout(() => el.classList.remove("show"), 3200);
@@ -32,126 +28,114 @@ function toast(msg) {
 
 function setView(v) {
   view = v;
-  document.querySelectorAll("#sideNav button").forEach((b) => {
-    b.classList.toggle("active", b.getAttribute("data-view") === v);
+  document.querySelectorAll("#sideNav button, #bottomNav button").forEach((b) => {
+    const dv = b.getAttribute("data-view");
+    b.classList.toggle("active", dv === v);
   });
   render();
 }
 
 function fmtVal(n) {
-  if (n == null) return "—";
+  if (n == null) return "-";
   if (typeof n === "string") return n;
-  if (n >= 1e6) return "€" + (n / 1e6).toFixed(1) + "m";
-  if (n >= 1e3) return "€" + Math.round(n / 1e3) + "k";
-  return "€" + n;
-}
-
-function newsBadgeClass(n) {
-  const imp = (n.importance || "").toLowerCase();
-  const cat = (n.category || "").toLowerCase();
-  if (imp === "breaking") return "breaking";
-  if (cat.includes("transfer") || cat.includes("rumour")) return "transfer";
-  if (cat.includes("award") || (n.headline || "").toLowerCase().includes("team of the")) return "award";
-  if (cat.includes("injury")) return "injury";
-  if (cat.includes("club") || cat.includes("manager")) return "club";
-  if (cat.includes("player")) return "player";
-  return "";
-}
-
-function formPills(formStr) {
-  if (!formStr || formStr === "—") return "";
-  return `<div class="form-pills">${[...String(formStr)].map((c) => `<span class="${c}">${c}</span>`).join("")}</div>`;
-}
-
-/** Deterministic palette from string (crest / face placeholder colour) */
-function hashHue(s) {
-  let h = 0;
-  const str = String(s || "x");
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
-  return h % 360;
-}
-
-function faceSlot(player, size) {
-  const p = player || {};
-  const name = p.name || "Player";
-  const parts = name.trim().split(/\s+/);
-  const ini = ((parts[0] && parts[0][0]) || "?") + ((parts[1] && parts[1][0]) || "");
-  const hue = hashHue(name + (p.position || ""));
-  const sz = size || 56;
-  return `<div class="face-slot" style="width:${sz}px;height:${sz}px;--face-hue:${hue}" title="${name}"><span>${ini.toUpperCase()}</span></div>`;
-}
-
-function crestSlot(clubName, size) {
-  const name = clubName || "Club";
-  const words = name.replace(/[^a-zA-Z0-9\s]/g, " ").trim().split(/\s+/).filter(Boolean);
-  let ini = "";
-  if (words.length >= 2) ini = (words[0][0] || "") + (words[1][0] || "");
-  else ini = (words[0] || "CL").slice(0, 2);
-  const hue = hashHue(name);
-  const sz = size || 40;
-  return `<div class="crest-slot" style="width:${sz}px;height:${sz}px;--crest-hue:${hue}" title="${name}"><span>${ini.toUpperCase()}</span></div>`;
-}
-
-function ratingClass(r) {
-  if (r >= 7.5) return "high";
-  if (r >= 6.0) return "mid";
-  return "low";
-}
-
-function ord(n) {
-  if (!n) return "—";
-  return n + (n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th");
+  if (n >= 1e6) return "EUR " + (n / 1e6).toFixed(1) + "m";
+  if (n >= 1e3) return "EUR " + Math.round(n / 1e3) + "k";
+  return "EUR " + n;
 }
 
 async function refresh() {
   hub = await api("/api/hub");
-  try { press = await api("/api/press"); } catch { press = { questions: [] }; }
-  try { squad = await api("/api/squad"); } catch { squad = { players: [] }; }
-  try { market = await api("/api/market?limit=200"); } catch { market = { players: [] }; }
-  try { matchStats = await api("/api/match/stats"); } catch { matchStats = null; }
-  try { clubSocial = await api("/api/club/social"); } catch { clubSocial = null; }
   render();
+  return hub;
+}
+
+function renderHub() {
+  if (!hub) return "<div class=\"card\">Loading...</div>";
+  const p = hub.player || {};
+  const obj = window.renderObjectives ? window.renderObjectives(hub.objectives) : "";
+  const inbox = window.renderInbox ? window.renderInbox(hub.inbox) : "";
+  const medical = hub.medical
+    ? `<div class="card"><h3>Medical</h3><pre style="white-space:pre-wrap;font-size:12px">${JSON.stringify(hub.medical, null, 2)}</pre></div>`
+    : "";
+  const squad = hub.matchdaySquad
+    ? `<div class="card"><h3>Matchday squad (${hub.matchdaySquad.formation || ""})</h3>
+        <p class="muted">${hub.matchdaySquad.user?.standing || ""}</p>
+        <div class="grid-2">${(hub.matchdaySquad.xi || [])
+          .map(
+            (x) =>
+              `<div class="panel">${x.isUser ? "★ " : ""}${x.name} <span class="pill">${x.position}</span> ${x.ovr}</div>`
+          )
+          .join("")}</div></div>`
+    : "";
+  const roles = hub.roles
+    ? `<div class="card"><h3>Role & instructions</h3>
+        <p>${hub.roles.roleLabel || ""} · ${hub.roles.instructionLabel || ""}</p>
+        <div>${(hub.roles.availableRoles || [])
+          .map(
+            (r) =>
+              `<button data-action="set-role" data-role="${r.id}">${r.label}</button> `
+          )
+          .join("")}</div>
+        <div style="margin-top:8px">${(hub.roles.instructions || [])
+          .map(
+            (i) =>
+              `<button data-action="set-role" data-instruction="${i.id}">${i.label}</button> `
+          )
+          .join("")}</div></div>`
+    : "";
+  const neg = hub.negotiation
+    ? `<div class="card"><h3>Contract</h3>
+        <button class="btn" data-action="neg-open">Open negotiation</button>
+        <button data-action="neg-respond" data-neg="accept">Accept</button>
+        <button data-action="neg-respond" data-neg="counter">Counter</button>
+        <button data-action="neg-respond" data-neg="mediate">Mediate</button>
+        <pre style="font-size:12px">${JSON.stringify(hub.negotiation, null, 2)}</pre></div>`
+    : `<div class="card"><button class="btn" data-action="neg-open">Open negotiation</button></div>`;
+
+  return `
+    <div class="card match-poster">
+      <h2>${p.name || "Player"} · ${p.ovr ?? ""} OVR</h2>
+      <div class="muted">${p.position || ""} · Age ${p.age ?? ""} · ${p.club || ""}</div>
+      <div class="grid-3" style="margin-top:12px">
+        <div><span class="pill">Form</span> ${p.form ?? "-"}</div>
+        <div><span class="pill">Fitness</span> ${p.fitness ?? "-"}</div>
+        <div><span class="pill">Trust</span> ${p.trust ?? p.managerTrust ?? "-"}</div>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn" data-action="advance">Advance matchday</button>
+        <button data-action="train" data-focus="Tactical">Train</button>
+        <button data-action="match-start">Play match</button>
+        <button data-action="save">Save</button>
+      </div>
+    </div>
+    ${obj}${inbox}${squad}${roles}${medical}${neg}
+  `;
 }
 
 function render() {
-  if (!hub) return;
-  const p = hub.player;
-  $("sideSeason").textContent = (hub.season || "—") + "  ·  " + (hub.date || "");
-  $("sideName").textContent = p ? p.name : "—";
-  $("sideMeta").textContent = p ? `${p.position} · ${p.club || "Free Agent"}` : "—";
-  $("sideOvr").textContent = p ? `${p.ovr} OVR` : "— OVR";
-  const sf = $("sideFace");
-  if (sf) sf.innerHTML = p ? faceSlot(p, 40) : "";
-
-  const titles = {
-    overview: ["OVERVIEW", p?.name || "Career", p ? `${p.club} · ${p.position} · Age ${p.age}` : ""],
-    league: ["COMPETITION", "League Table", `${hub.season || ""} · ${hub.date || ""}`],
-    stats: ["MATCH CENTRE", "Match Statistics", "xG · shots · possession · ratings"],
-    clubSocial: ["CLUB MEDIA", "Official Club Feed", "Fixtures · results · club posts"],
-    transfers: ["TRANSFER CENTRE", "Transfer Network", "Window activity · targets"],
-    development: ["DEVELOPMENT", "Training & Growth", p ? `${p.name} · ${p.position}` : ""],
-    press: ["MEDIA", "Press Conference", "Answer questions after matches"],
-    news: ["WORLD FEED", "News & Social", "Event-driven stories only"],
-    inbox: ["INBOX", "Messages", "Manager · Agent · Media"],
-    squad: ["SQUAD", "First-Team Squad", "Values · wages · roles"],
-    market: ["MARKET", "Player Valuations", "Ranked by estimated market value"],
-  };
-  const t = titles[view] || titles.overview;
-  $("pageEyebrow").textContent = t[0];
-  $("pageTitle").textContent = t[1];
-  $("pageSub").textContent = t[2];
-
-  const el = $("content");
-  if (view === "overview") el.innerHTML = renderOverview();
-  else if (view === "league") el.innerHTML = renderLeague();
-  else if (view === "stats") el.innerHTML = renderMatchStats();
-  else if (view === "clubSocial") el.innerHTML = renderClubSocial();
-  else if (view === "transfers") el.innerHTML = renderTransfers();
-  else if (view === "development") el.innerHTML = renderDev();
-  else if (view === "press") el.innerHTML = renderPress();
-  else if (view === "news") el.innerHTML = renderNews();
-  else if (view === "inbox") el.innerHTML = renderInbox();
-  else if (view === "squad") el.innerHTML = renderSquad();
-  else if (view === "market") el.innerHTML = renderMarket();
-  bindActions();
+  const content = $("content");
+  if (!content) return;
+  if (view === "hub" || view === "overview") content.innerHTML = renderHub();
+  else if (view === "news") {
+    content.innerHTML = `<div class="card"><h3>News</h3><p class="muted">Loading feed...</p></div>`;
+    api("/api/news")
+      .then((d) => {
+        const items = d.news || [];
+        content.innerHTML = `<div class="card"><h3>News</h3>${items
+          .map(
+            (n) =>
+              `<div class="panel news-card" style="margin:10px 0"><strong>${n.headline}</strong><div class="muted">${n.body || ""}</div></div>`
+          )
+          .join("")}</div>`;
+      })
+      .catch((e) => (content.innerHTML = `<div class="card">${e.message}</div>`));
+  } else {
+    content.innerHTML = renderHub();
+  }
 }
+
+window.api = api;
+window.refresh = refresh;
+window.setView = setView;
+window.toast = toast;
+window.$ = $;

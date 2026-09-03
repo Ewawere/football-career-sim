@@ -2,149 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>Football Career</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Football Career Sim</title>
+  <link rel="stylesheet" href="/mockup-ui.css" />
+  <link rel="stylesheet" href="/mobile-shell.css" />
   <style>
-    :root {
-      --bg: #0b1220; --card: #141e30; --accent: #3d9cf0;
-      --text: #e8eef7; --muted: #8b9bb4; --good: #3ecf8e; --bad: #f07178;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg); color: var(--text);
-      min-height: 100dvh; max-width: 430px; margin: 0 auto;
-      padding-bottom: 72px;
-    }
-    header { padding: 16px; position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid #1e2a40; }
-    header .date { color: var(--muted); font-size: 12px; }
-    header h1 { font-size: 18px; font-weight: 600; }
-    .card { background: var(--card); border-radius: 14px; padding: 14px; margin: 12px 16px; }
-    .row { display: flex; justify-content: space-between; gap: 8px; }
-    .stat { text-align: center; flex: 1; }
-    .stat b { display: block; font-size: 18px; }
-    .stat span { font-size: 11px; color: var(--muted); }
-    button {
-      background: var(--accent); color: #fff; border: none; border-radius: 12px;
-      padding: 12px 16px; font-size: 14px; font-weight: 600; width: 100%; margin-top: 8px;
-    }
-    button.secondary { background: #1e3a5f; }
-    .headline { font-size: 13px; padding: 8px 0; border-bottom: 1px solid #1e2a40; }
-    .table-row { display: flex; font-size: 13px; padding: 6px 0; }
-    .table-row .pos { width: 28px; color: var(--muted); }
-    .table-row .pts { margin-left: auto; font-weight: 600; }
-    nav.tabbar {
-      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
-      width: 100%; max-width: 430px; display: flex; background: #0e1628;
-      border-top: 1px solid #1e2a40; padding: 8px 0;
-    }
-    nav.tabbar button {
-      flex: 1; background: transparent; color: var(--muted); font-size: 11px; padding: 8px;
-    }
-    nav.tabbar button.active { color: var(--accent); }
-    .panel { display: none; }
-    .panel.active { display: block; }
-    pre { white-space: pre-wrap; font-size: 12px; color: var(--muted); }
+    #toast { position: fixed; bottom: 20px; right: 20px; background: #134e4a; color: #fff; padding: 10px 14px; border-radius: 10px; opacity: 0; transition: opacity .2s; z-index: 50; }
+    #toast.show { opacity: 1; }
+    #gate, #app { padding: 16px; }
+    #gate.hidden, #app.hidden { display: none; }
+    .side-nav { display: flex; flex-direction: column; gap: 6px; }
   </style>
 </head>
 <body>
-  <header>
-    <div class="date" id="date">—</div>
-    <h1 id="title">Football Career</h1>
-  </header>
-
-  <div id="hub" class="panel active">
-    <div class="card" id="playerCard">Start a career to begin.</div>
-    <div class="card">
-      <button id="btnStart">Start Career (Jordan Vale RW)</button>
-      <button class="secondary" id="btnTrain">Train</button>
-      <button class="secondary" id="btnMatchday">Play Matchday</button>
-      <button class="secondary" id="btnEndSeason">Finish Season</button>
-      <button class="secondary" id="btnNextSeason">Next Season + Transfers</button>
+  <div id="toast"></div>
+  <div id="gate">
+    <div class="card" style="max-width:480px;margin:40px auto">
+      <h1>Football Career Sim</h1>
+      <p class="muted">Hybrid FM + EA FC career</p>
+      <label>First name <input id="firstName" value="Alex" /></label><br/><br/>
+      <label>Last name <input id="lastName" value="Player" /></label><br/><br/>
+      <label>Position
+        <select id="position">
+          <option>ST</option><option>RW</option><option>LW</option>
+          <option selected>CM</option><option>CDM</option><option>CAM</option>
+          <option>CB</option><option>LB</option><option>RB</option><option>GK</option>
+        </select>
+      </label><br/><br/>
+      <button id="startCareer" class="btn">Start career</button>
     </div>
   </div>
-
-  <div id="table" class="panel">
-    <div class="card" id="tableBody">No table yet.</div>
+  <div id="app" class="hidden shell">
+    <nav id="sideNav" class="side-nav card">
+      <button data-view="hub" class="active">Hub</button>
+      <button data-view="news">News</button>
+      <button data-view="hub">Squad</button>
+      <button data-view="hub">More</button>
+    </nav>
+    <main>
+      <div id="content"></div>
+      <nav id="bottomNav" class="card" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button data-view="hub" class="active">Hub</button>
+        <button data-view="news">News</button>
+      </nav>
+    </main>
   </div>
-
-  <div id="feed" class="panel">
-    <div class="card" id="feedBody">No news yet.</div>
-  </div>
-
-  <nav class="tabbar">
-    <button class="active" data-tab="hub">Hub</button>
-    <button data-tab="table">Table</button>
-    <button data-tab="feed">Feed</button>
-  </nav>
-
-  <script>
-    async function api(path, method = 'GET', body) {
-      const opts = { method, headers: { 'Content-Type': 'application/json' } };
-      if (body) opts.body = JSON.stringify(body);
-      const r = await fetch(path, opts);
-      return r.json();
-    }
-
-    function render(hub) {
-      document.getElementById('date').textContent = hub.date + ' · ' + hub.season;
-      const p = hub.player;
-      if (p) {
-        document.getElementById('title').textContent = p.name;
-        document.getElementById('playerCard').innerHTML =
-          '<div class="row">' +
-          '<div class="stat"><b>' + p.ovr + '</b><span>OVR</span></div>' +
-          '<div class="stat"><b>' + p.pot + '</b><span>POT</span></div>' +
-          '<div class="stat"><b>' + p.age + '</b><span>Age</span></div>' +
-          '<div class="stat"><b>' + p.goals + '</b><span>Goals</span></div>' +
-          '</div>' +
-          '<p style="margin-top:10px;font-size:13px;color:var(--muted)">' + (p.club || '') + ' · ' + p.position +
-          ' · Form ' + p.form + ' · Trust ' + p.trust + '</p>' +
-          '<pre style="margin-top:8px">' + (p.standing || '') + '</pre>';
-      }
-      const tb = document.getElementById('tableBody');
-      if (hub.table && hub.table.length) {
-        tb.innerHTML = hub.table.map(r =>
-          '<div class="table-row"><span class="pos">' + r.pos + '</span>' +
-          '<span>' + r.club + '</span><span class="pts">' + r.pts + '</span></div>'
-        ).join('');
-      }
-      const fb = document.getElementById('feedBody');
-      if (hub.news && hub.news.length) {
-        fb.innerHTML = hub.news.map(n =>
-          '<div class="headline"><b>' + (n.importance || '') + '</b> ' + (n.headline || '') + '</div>'
-        ).join('');
-      }
-    }
-
-    document.getElementById('btnStart').onclick = async () => {
-      const data = await api('/api/start', 'POST', {});
-      render(data.hub || data);
-    };
-    document.getElementById('btnTrain').onclick = async () => {
-      render(await api('/api/train', 'POST', { focus: 'Technical', intensity: 70 }));
-    };
-    document.getElementById('btnMatchday').onclick = async () => {
-      render(await api('/api/matchday', 'POST', {}));
-    };
-    document.getElementById('btnEndSeason').onclick = async () => {
-      render(await api('/api/end-season', 'POST', {}));
-    };
-    document.getElementById('btnNextSeason').onclick = async () => {
-      const data = await api('/api/next-season', 'POST', {});
-      render(data.hub || data);
-    };
-
-    document.querySelectorAll('nav.tabbar button').forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        btn.classList.add('active');
-        document.getElementById(btn.dataset.tab).classList.add('active');
-      };
-    });
-
-    api('/api/hub').then(render).catch(() => {});
-  </script>
+  <script src="/app-views-a3.js"></script>
+  <script src="/app-core.js"></script>
+  <script src="/app-boot.js"></script>
 </body>
 </html>
