@@ -1,5 +1,5 @@
 /**
- * Player-facing contract negotiation - demands, club offer, accept/reject.
+ * Player-facing contract negotiation - demands, club offer, accept/reject/mediate.
  */
 
 import type { World } from "../world/world.js";
@@ -68,49 +68,33 @@ export function openNegotiation(world: World): NegotiationState {
   const form = player.state.form ?? 50;
 
   let demandMult = 1.12;
-  if (form >= 70 && apps >= 8) demandMult += 0.08;
-  if (player.potential >= 84 && player.age <= 23) demandMult += 0.1;
-  if (trust < 40) demandMult += 0.05;
-  const demandedWage = Math.round(current * demandMult / 100) * 100;
-  const demandedYears = player.age <= 23 ? 5 : player.age <= 29 ? 4 : player.age <= 32 ? 3 : 2;
+  if (form >= 75) demandMult += 0.08;
+  if (apps >= 15) demandMult += 0.05;
+  if (trust >= 70) demandMult += 0.03;
+  if (player.age <= 21) demandMult += 0.04;
+
+  neg.demandedWage = Math.round(current * demandMult);
+  neg.demandedYears = player.age <= 23 ? 4 : 3;
 
   const room = wageRoom(world, club.id);
-  let offerMult = 1.04;
+  let offerMult = 1.02;
   if (trust >= 70) offerMult += 0.04;
-  if (apps >= 15) offerMult += 0.03;
-  let offeredWage = Math.round(current * offerMult / 100) * 100;
-  if (offeredWage - current > room + 25000) {
-    offeredWage = current + Math.max(0, Math.floor(room * 0.7));
-  }
-  if (offeredWage < current) offeredWage = current;
+  if (form >= 70) offerMult += 0.03;
+  if (apps < 5) offerMult -= 0.05;
 
-  const offeredYears = player.age <= 24 ? 4 : player.age <= 30 ? 3 : 2;
-  const releaseClause =
-    player.potential >= 80
-      ? Math.round(value * (1.35 + (player.age <= 22 ? 0.25 : 0.1)))
-      : player.contract?.releaseClause ?? null;
+  neg.offeredWage = Math.round(Math.min(current * offerMult + room * 0.02, neg.demandedWage * 0.98));
+  if (neg.offeredWage < current) neg.offeredWage = current;
+  neg.offeredYears = neg.demandedYears;
+  neg.releaseClause = Math.round(value * (player.age <= 23 ? 1.8 : 1.4));
 
   neg.open = true;
   neg.status = "open";
   neg.agentRounds = 0;
-  neg.maxAgentRounds = 3;
-  neg.history = [`Talks opened at ${club.name}.`];
-  neg.demandedWage = demandedWage;
-  neg.offeredWage = offeredWage;
-  neg.demandedYears = demandedYears;
-  neg.offeredYears = offeredYears;
-  neg.releaseClause = releaseClause;
-  neg.clubNote =
-    offeredWage >= demandedWage * 0.95
-      ? "The club is close to your terms."
-      : room < 15000
-        ? "Wage budget is tight - board limited the package."
-        : "The club values you but will not match the full demand yet.";
-  neg.agentNote =
-    demandedWage > offeredWage * 1.1
-      ? "I'd push once more or look at a loan step-up if minutes dry up."
-      : "This is a fair market deal - accepting keeps stability.";
-  neg.lastMessage = "Negotiation opened.";
+  neg.history = [];
+  neg.clubNote = `Board offer reflects wage room and your recent minutes at ${club.name}.`;
+  neg.agentNote = "We can accept, counter, mediate, or walk.";
+  neg.lastMessage = "Talks opened.";
+  neg.history.push(neg.lastMessage);
   return { ...neg };
 }
 
@@ -121,74 +105,36 @@ export function respondNegotiation(
   const pid = world.userPlayerId;
   if (!pid) throw new Error("No player");
   const player = world.players.get(pid)!;
-  const club = player.currentClubId ? world.clubs.get(player.currentClubId) : null;
+  const club = player.currentClubId ? world.clubs.get(player.currentClubId)! : null;
   if (!club) throw new Error("No club");
   const neg = ensureNeg(world);
   if (!neg.open && action !== "accept") {
+    // allow accept only if already open; otherwise reopen path
+  }
+  if (!neg.open) {
     openNegotiation(world);
   }
 
   if (action === "counter") {
-    if (neg.agentRounds >= neg.maxAgentRounds) {
-      neg.lastMessage = "Talks stalled - final offer stands. Accept or walk.";
-      neg.clubNote = "Board: no more rounds this window.";
-      neg.agentNote = "I can't extract more without you threatening a transfer request.";
-      neg.history.push("Hard deadlock");
-      return { ...neg };
-    }
-    neg.agentRounds += 1;
-    const room = wageRoom(world, club.id);
-    const agentPull = 0.35 + neg.agentRounds * 0.08;
-    const mid = Math.round((neg.demandedWage * (1 - agentPull * 0.25) + neg.offeredWage * (1 + agentPull * 0.35)) / 2 / 100) * 100;
-    const next = Math.min(neg.demandedWage, Math.max(neg.offeredWage, mid));
-    neg.demandedWage = Math.round((neg.demandedWage * 0.97 + next * 0.03) / 100) * 100;
-    if (next - (player.contract?.wage ?? neg.offeredWage) > room + 40000) {
-      neg.lastMessage = `Round ${neg.agentRounds}: board blocked a higher wage.`;
-      neg.clubNote = "Finances capped the package.";
-      neg.agentNote = "I'll keep pressure on, but the budget is real.";
-      neg.history.push(`R${neg.agentRounds}: board block`);
-    } else {
-      neg.offeredWage = next;
-      if (neg.agentRounds >= 2) {
-        neg.offeredYears = Math.max(neg.offeredYears, Math.min(neg.demandedYears, neg.offeredYears + 1));
-      }
-      neg.lastMessage = `Round ${neg.agentRounds}: club improved after agent mediation.`;
-      neg.clubNote = "Revised package after agent talks.";
-      neg.agentNote =
-        neg.offeredWage >= neg.demandedWage * 0.96
-          ? "This is as good as it gets - I'd sign."
-          : "Still a gap. One more push if you want, or take stability.";
-      neg.history.push(`R${neg.agentRounds}: offer EUR ${Math.round(next / 1000)}k/w`);
-    }
+    neg.demandedWage = Math.round(neg.demandedWage * 1.03);
+    neg.offeredWage = Math.round(neg.offeredWage * 1.02);
+    neg.agentRounds = Math.min(neg.maxAgentRounds, (neg.agentRounds || 0) + 1);
+    neg.lastMessage = "You countered. Club edged the offer up slightly.";
+    neg.agentNote = `Round ${neg.agentRounds}/${neg.maxAgentRounds}.`;
+    neg.history.push(neg.lastMessage);
     return { ...neg };
   }
 
   if (action === "mediate") {
-    if (neg.agentRounds >= neg.maxAgentRounds) {
-      neg.lastMessage = "Agent has no more leverage this window.";
-      neg.agentNote = "We've pushed as far as the board will listen for now.";
+    if ((neg.agentRounds || 0) >= neg.maxAgentRounds) {
+      neg.lastMessage = "Agent has no more leverage this week.";
       neg.history.push(neg.lastMessage);
       return { ...neg };
     }
-    neg.agentRounds += 1;
-    const room = wageRoom(world, club.id);
-    const trust = player.state.managerTrust ?? 50;
-    const form = player.state.form ?? 50;
-    let bump = Math.round(neg.offeredWage * (0.03 + neg.agentRounds * 0.015) / 100) * 100;
-    if (trust >= 70) bump = Math.round(bump * 1.25);
-    if (form >= 70) bump = Math.round(bump * 1.15);
-    const next = Math.min(neg.demandedWage, neg.offeredWage + bump);
-    if (next - (player.contract?.wage ?? 0) > room + 55000) {
-      neg.lastMessage = `Agent mediation #${neg.agentRounds}: board cited finances - small gesture only.`;
-      neg.offeredWage = Math.min(neg.demandedWage, neg.offeredWage + Math.max(500, Math.floor(bump * 0.35)));
-    } else {
-      neg.offeredWage = next;
-      if (neg.agentRounds >= 2 && neg.offeredYears < neg.demandedYears) {
-        neg.offeredYears += 1;
-      }
-      neg.lastMessage = `Agent mediation #${neg.agentRounds}: club moved to EUR ${Math.round(neg.offeredWage / 1000)}k/w.`;
-    }
-    neg.clubNote = "Agent sat with the board and reopened the numbers.";
+    neg.agentRounds = (neg.agentRounds || 0) + 1;
+    const mid = Math.round((neg.demandedWage + neg.offeredWage) / 2);
+    neg.offeredWage = Math.round(neg.offeredWage * 0.4 + mid * 0.6);
+    neg.lastMessage = "Agent sat with the board and reopened the numbers.";
     neg.agentNote =
       neg.offeredWage >= neg.demandedWage * 0.97
         ? "Close enough - I'd take this."
@@ -209,6 +155,7 @@ export function respondNegotiation(
     return { ...neg };
   }
 
+  // accept
   const oldWage = player.contract?.wage ?? 0;
   const years = neg.offeredYears;
   const endYear = parseInt(world.calendar.currentDate.slice(0, 4), 10) + years;
@@ -241,7 +188,6 @@ export function snapshotNegotiation(world: World) {
   return {
     ...neg,
     currentWage,
-    currentWageLabel: formatMarketValue(currentWage),
     currentWageWeekly: `EUR ${Math.round(currentWage / 1000)}k/w`,
     endDate: player.contract?.endDate ?? null,
     demandedLabel: `EUR ${Math.round(neg.demandedWage / 1000)}k/w`,
