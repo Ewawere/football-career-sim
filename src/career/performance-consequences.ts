@@ -1,6 +1,5 @@
 /**
- * Real-life style consequences when a player is underperforming.
- * Low form / ratings / manager trust → benched, transfer-listed, loaned, or sold pressure.
+ * Consequences when a player underperforms: bench, transfer list, loan pressure.
  */
 
 import type { EntityId } from "../core/types.js";
@@ -70,53 +69,42 @@ export function processUnderperformingPlayers(world: World): PlayerConsequence[]
 
       const wasListed = isTransferListed(player);
 
-      if (wasListed && health >= 58 && form >= 55 && trust >= 45) {
-        setTransferListed(player, false);
+      if (health >= 55) {
         setPoorStreak(player, 0);
+        if (wasListed && health >= 62) {
+          setTransferListed(player, false);
+          (player.state as any).loanListed = false;
+          results.push({
+            playerId: pid,
+            clubId: club.id,
+            action: "Restored",
+            reason: "Form recovered - removed from transfer list",
+          });
+        }
+        continue;
+      }
+
+      const streak = getPoorStreak(player) + 1;
+      setPoorStreak(player, streak);
+
+      if (health < 28 && streak >= 4) {
+        setTransferListed(player, true);
+        (player.state as any).openToTransfer = true;
+        player.state.morale = Math.max(15, player.state.morale - 12);
         results.push({
           playerId: pid,
           clubId: club.id,
-          action: "Restored",
-          reason: "Form and trust recovered — removed from transfer list",
+          action: "ForcedExitPressure",
+          reason: "Sustained underperformance - club wants them moved on",
         });
         world.events.emit(Events.NEWS_GENERATED, {
-          type: "player_restored",
+          type: "player_ousted",
           playerId: pid,
           clubId: club.id,
           name: player.displayName,
           clubName: club.name,
+          severity: "forced",
         });
-        continue;
-      }
-
-      if (form < 42 || (player.state.ratingCount >= 4 && avg < 55) || trust < 35) {
-        setPoorStreak(player, getPoorStreak(player) + 1);
-      } else if (form >= 55 && trust >= 50) {
-        setPoorStreak(player, getPoorStreak(player) - 1);
-      }
-
-      const streak = getPoorStreak(player);
-
-      if (health < 28 && streak >= 4) {
-        if (!wasListed) {
-          setTransferListed(player, true);
-          player.state.morale = Math.max(15, player.state.morale - 12);
-          player.state.managerTrust = Math.max(10, player.state.managerTrust - 8);
-          results.push({
-            playerId: pid,
-            clubId: club.id,
-            action: "ForcedExitPressure",
-            reason: `Persistent underperformance (form ${form.toFixed(0)}, rating ${(avg / 10).toFixed(1)}) — club pushing exit`,
-          });
-          world.events.emit(Events.NEWS_GENERATED, {
-            type: "player_ousted",
-            playerId: pid,
-            clubId: club.id,
-            name: player.displayName,
-            clubName: club.name,
-            severity: "forced",
-          });
-        }
       } else if (health < 36 && streak >= 3) {
         if (!wasListed) {
           setTransferListed(player, true);
@@ -125,7 +113,7 @@ export function processUnderperformingPlayers(world: World): PlayerConsequence[]
             playerId: pid,
             clubId: club.id,
             action: "TransferListed",
-            reason: `Dropped below club standards — placed on transfer list`,
+            reason: "Dropped below club standards - placed on transfer list",
           });
           world.events.emit(Events.NEWS_GENERATED, {
             type: "player_ousted",
@@ -143,7 +131,7 @@ export function processUnderperformingPlayers(world: World): PlayerConsequence[]
             playerId: pid,
             clubId: club.id,
             action: "LoanListed",
-            reason: "Limited minutes and poor form — loan move sought",
+            reason: "Limited minutes and poor form - loan move sought",
           });
           world.events.emit(Events.NEWS_GENERATED, {
             type: "player_ousted",
@@ -162,7 +150,7 @@ export function processUnderperformingPlayers(world: World): PlayerConsequence[]
             playerId: pid,
             clubId: club.id,
             action: "Benched",
-            reason: "Manager loses patience — reduced role",
+            reason: "Manager loses patience - reduced role",
           });
         }
       } else if (health < 52 && streak === 1) {
@@ -170,7 +158,7 @@ export function processUnderperformingPlayers(world: World): PlayerConsequence[]
           playerId: pid,
           clubId: club.id,
           action: "Warned",
-          reason: "Below expected level — warned to improve",
+          reason: "Below expected level - warned to improve",
         });
       }
     }
