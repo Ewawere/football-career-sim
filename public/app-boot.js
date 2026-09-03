@@ -1,125 +1,120 @@
-function bindActions() {
-  document.querySelectorAll("[data-act]").forEach((btn) => {
-    btn.onclick = async () => {
-      const act = btn.getAttribute("data-act");
-      btn.disabled = true;
-      try {
-        if (act === "train") {
-          const focus = btn.getAttribute("data-focus") || "Technical";
-          await api("/api/train", { method: "POST", body: JSON.stringify({ focus }) });
-          toast("Training session completed · " + focus);
-        } else if (act === "advance") {
-          const r = await api("/api/advance", { method: "POST", body: "{}" });
-          if (r.done) toast(r.message);
-          else {
-            const nq = (r.pressQuestions || []).length;
-            toast(`Matchday ${r.matchday} · ${r.matchesPlayed} matches` + (nq ? ` · ${nq} press Qs` : ""));
-            if (nq) setView("press");
-          }
-        } else if (act === "endSeason") {
-          await api("/api/season/end", { method: "POST", body: "{}" });
-          toast("Season ended · trophies awarded");
-        } else if (act === "nextSeason") {
-          await api("/api/season/next", { method: "POST", body: "{}" });
-          toast("New season · transfer window open");
-        } else if (act === "save") {
-          await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
-          toast("Career saved");
-        } else if (act === "agent") {
-          const r = await api("/api/agent");
-          toast(r.advice?.summary || JSON.stringify(r.advice || r).slice(0, 140));
-        } else if (act === "answerPress") {
-          const r = await api("/api/press/answer", {
-            method: "POST",
-            body: JSON.stringify({
-              questionId: btn.getAttribute("data-qid"),
-              responseId: btn.getAttribute("data-rid"),
-            }),
-          });
-          toast(r.narrative || "Answer submitted");
-          try { press = await api("/api/press"); } catch {}
-        } else if (act === "refreshPress") {
-          await api("/api/press");
-          try { press = await api("/api/press"); } catch {}
-          toast("Press pool refreshed");
-        }
-        await refresh();
-      } catch (e) {
-        toast(e.message || String(e));
-      } finally {
-        btn.disabled = false;
-      }
-    };
+
+function bindBottomNav() {
+  const nav = document.getElementById("bottomNav");
+  if (!nav) return;
+  nav.querySelectorAll("button[data-view]").forEach((btn) => {
+    btn.onclick = () => setView(btn.getAttribute("data-view"));
   });
 }
 
-// Nav
-document.querySelectorAll("#sideNav button").forEach((b) => {
-  b.addEventListener("click", () => setView(b.getAttribute("data-view")));
-});
-
-const createForm = $("createForm");
-if (createForm) {
-  createForm.onsubmit = async (ev) => {
-    ev.preventDefault();
-    const fd = new FormData(createForm);
-    const body = {
-      firstName: String(fd.get("firstName") || "Jordan").trim(),
-      lastName: String(fd.get("lastName") || "Vale").trim(),
-      position: String(fd.get("position") || "RW"),
-      preferredFoot: String(fd.get("preferredFoot") || "Right"),
-      physicalProfile: String(fd.get("physicalProfile") || "Athletic"),
-      nationality: String(fd.get("nationality") || "England"),
-      age: Number(fd.get("age") || 17),
-      potential: Number(fd.get("potential") || 86),
-    };
-    const h = fd.get("heightCm");
-    if (h) body.heightCm = Number(h);
-
-    const btn = $("btnStart");
-    if (btn) btn.disabled = true;
-    try {
-      const result = await api("/api/career/start", {
-        method: "POST",
-        body: JSON.stringify(body),
+function bindActions() {
+  document.querySelectorAll("[data-nav]").forEach((btn) => {
+    btn.onclick = () => setView(btn.getAttribute("data-nav"));
+  });
+  document.querySelectorAll("[data-news-filter]").forEach((btn) => {
+    btn.onclick = () => {
+      const f = btn.getAttribute("data-news-filter");
+      document.querySelectorAll("[data-news-filter]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".news-card").forEach((card) => {
+        const cat = card.getAttribute("data-news-cat") || "";
+        card.style.display = f === "all" || cat === f ? "" : "none";
       });
-      await refresh();
-      $("gate").classList.add("hidden");
-      $("app").classList.remove("hidden");
-      const foot = body.preferredFoot;
-      const club = result?.club?.name || hub?.player?.club || "your club";
-      toast(`${body.firstName} ${body.lastName} · ${foot}-footed ${body.position} at ${club}`);
-    } catch (e) {
-      toast(e.message || String(e));
-      if (btn) btn.disabled = false;
+    };
+  });
+
+  document.body.addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-action]");
+    if (!t) return;
+    const action = t.getAttribute("data-action");
+    try {
+      if (action === "advance") {
+        await api("/api/advance", { method: "POST", body: "{}" });
+        await refresh();
+      } else if (action === "train") {
+        const focus = t.getAttribute("data-focus") || "Tactical";
+        await api("/api/train", { method: "POST", body: JSON.stringify({ focus }) });
+        await refresh();
+      } else if (action === "claim-obj") {
+        const id = t.getAttribute("data-id");
+        await api("/api/objectives/claim", { method: "POST", body: JSON.stringify({ objectiveId: id }) });
+        await refresh();
+      } else if (action === "inbox-read") {
+        const id = t.getAttribute("data-id");
+        await api("/api/inbox/read", { method: "POST", body: JSON.stringify({ id }) });
+        await refresh();
+      } else if (action === "neg-open") {
+        await api("/api/negotiation/open", { method: "POST", body: "{}" });
+        await refresh();
+      } else if (action === "neg-respond") {
+        const act = t.getAttribute("data-neg") || "mediate";
+        await api("/api/negotiation/respond", { method: "POST", body: JSON.stringify({ action: act }) });
+        await refresh();
+      } else if (action === "set-role") {
+        const role = t.getAttribute("data-role");
+        const instruction = t.getAttribute("data-instruction");
+        await api("/api/roles", {
+          method: "POST",
+          body: JSON.stringify({ role, instruction }),
+        });
+        await refresh();
+      } else if (action === "match-start") {
+        await api("/api/match/start", { method: "POST", body: "{}" });
+        setView("match");
+        await refresh();
+      } else if (action === "match-finish") {
+        await api("/api/match/finish", { method: "POST", body: "{}" });
+        await refresh();
+      } else if (action === "season-end") {
+        await api("/api/season/end", { method: "POST", body: "{}" });
+        await refresh();
+      } else if (action === "season-next") {
+        await api("/api/season/next", { method: "POST", body: "{}" });
+        await refresh();
+      } else if (action === "save") {
+        await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
+      } else if (action === "like-news" || action === "react-news") {
+        t.classList.add("active");
+      }
+    } catch (err) {
+      console.error(action, err);
+      alert(err.message || String(err));
     }
-  };
+  });
 }
 
-$("btnTrain").onclick = () => {
-  const b = document.createElement("button");
-  b.setAttribute("data-act", "train");
-  document.body.appendChild(b);
-  bindActions();
-  b.click();
-  b.remove();
-};
-$("btnMatchday").onclick = () => {
-  const b = document.createElement("button");
-  b.setAttribute("data-act", "advance");
-  document.body.appendChild(b);
-  bindActions();
-  b.click();
-  b.remove();
-};
+async function startCareerFromGate() {
+  const firstName = document.getElementById("firstName")?.value || "Alex";
+  const lastName = document.getElementById("lastName")?.value || "Player";
+  const position = document.getElementById("position")?.value || "CM";
+  const res = await api("/api/start", {
+    method: "POST",
+    body: JSON.stringify({ firstName, lastName, position, age: 17, potential: 82 }),
+  });
+  if (res.error) throw new Error(res.error);
+  document.getElementById("gate")?.classList.add("hidden");
+  document.getElementById("app")?.classList.remove("hidden");
+  await refresh();
+  setView("hub");
+}
 
-api("/api/status")
-  .then((s) => {
-    if (s?.careerStarted) {
-      refresh().then(() => {
-        $("gate").classList.add("hidden");
-        $("app").classList.remove("hidden");
-      });
-    }
-  })
-  .catch(() => {});
+function boot() {
+  bindBottomNav();
+  bindActions();
+  const startBtn = document.getElementById("startCareer");
+  if (startBtn) startBtn.onclick = () => startCareerFromGate().catch((e) => alert(e.message || e));
+  api("/api/status")
+    .then((s) => {
+      if (s?.careerStarted) {
+        refresh().then(() => {
+          document.getElementById("gate")?.classList.add("hidden");
+          document.getElementById("app")?.classList.remove("hidden");
+          bindBottomNav();
+        });
+      }
+    })
+    .catch(() => {});
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
