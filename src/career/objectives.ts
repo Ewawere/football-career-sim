@@ -1,6 +1,5 @@
 /**
- * Season objectives — hybrid FM structure + FC progression clarity.
- * Generated once per season for the user player; progress is derived from live stats.
+ * Season objectives - hybrid FM structure + FC progression clarity.
  */
 
 import type { World } from "../world/world.js";
@@ -65,7 +64,7 @@ function generateObjectives(player: Player): SeasonObjective[] {
   const ratingTarget = ovr >= 78 ? 7.0 : 6.5;
   const trustTarget = 70;
 
-  const list: SeasonObjective[] = [
+  return [
     {
       id: "apps",
       kind: "appearances",
@@ -98,15 +97,15 @@ function generateObjectives(player: Player): SeasonObjective[] {
       target: assistsTarget,
       current: 0,
       unit: "assists",
-      rewardSp: 1,
+      rewardSp: 2,
       completed: false,
       claimed: false,
     },
     {
       id: "rating",
       kind: "avgRating",
-      label: "Consistency",
-      description: `Hold a season average rating of ${ratingTarget.toFixed(1)}+ (min 5 apps)`,
+      label: "Standards",
+      description: `Hold a ${ratingTarget.toFixed(1)} average rating`,
       target: ratingTarget,
       current: 0,
       unit: "avg",
@@ -117,7 +116,7 @@ function generateObjectives(player: Player): SeasonObjective[] {
     {
       id: "trust",
       kind: "trust",
-      label: "Manager's trust",
+      label: "Manager trust",
       description: `Reach ${trustTarget} manager trust`,
       target: trustTarget,
       current: 0,
@@ -127,7 +126,6 @@ function generateObjectives(player: Player): SeasonObjective[] {
       claimed: false,
     },
   ];
-  return list;
 }
 
 function avgRating(player: Player): number {
@@ -155,7 +153,10 @@ export function refreshObjectives(world: World): SeasonObjective[] {
   return st.objectives;
 }
 
-export function claimObjective(world: World, objectiveId: string): { ok: boolean; sp?: number; message: string } {
+export function claimObjective(
+  world: World,
+  objectiveId: string
+): { ok: boolean; sp?: number; message: string } {
   const st = ensureState(world);
   if (!st) return { ok: false, message: "No objectives" };
   refreshObjectives(world);
