@@ -1,53 +1,37 @@
 /**
  * Playable career web server - mobile UI + sim API.
+ * Lazy session init so process can bind PORT before heavy world gen.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { readFileSync, existsSync } from "fs";
 import { join, extname } from "path";
-import {
-  createSession,
-  startPlayerCareer,
-  advanceMatchday,
-  endSeason,
-  nextSeason,
-  doTrain,
-  getAgentAdvice,
-  getPress,
-  answerPress,
-  getIntlStatus,
-  getNextUserFixture,
-  beginPlayableMatch,
-  chooseHighlightAction,
-  skipToFullTime,
-  getPostMatchReport,
-  save,
-  type GameSession,
-  listMarketPlayers,
-  getSquadWithValues,
-  getLatestUserMatchStats,
-  getMatchStatsView,
-  getClubSocialView,
-} from "./api.js";
-import {
-  getHybridHub,
-  claimObjectiveApi,
-  markInboxApi as markInboxReadApi,
-  openNegotiationApi,
-  respondNegotiationApi,
-  setRoleApi,
-  getNarrativeThreads,
-  spendPlayStylePoint,
-  listJobOffersApi,
-  takeJobApi,
-  declineJobApi,
-  refreshJobOffersApi,
-} from "./hybrid.js";
-import { getNewsFeed } from "../news/engine.js";
-import { getSocialFeed } from "../social/engine.js";
 
-let session: GameSession = createSession(Date.now() % 100000);
+let session: any = null;
 let careerStarted = false;
+let bootError: string | null = null;
+
+async function loadApi() {
+  return import("./api.js");
+}
+
+async function loadHybrid() {
+  return import("./hybrid.js");
+}
+
+async function ensureSession() {
+  if (session) return session;
+  try {
+    const api = await loadApi();
+    session = api.createSession(Date.now() % 100000);
+    bootError = null;
+    return session;
+  } catch (e: any) {
+    bootError = String(e?.stack || e?.message || e);
+    console.error("[boot] createSession failed", bootError);
+    throw e;
+  }
+}
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, {
@@ -109,19 +93,23 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     return;
   }
 
-  if (path === "/api/status") {
+  if (path === "/api/health" || path === "/api/status") {
     return json(res, 200, {
       ok: true,
       careerStarted,
-      date: session.world.calendar.currentDate,
-      season: session.world.calendar.currentSeason,
+      bootError,
+      date: session?.world?.calendar?.currentDate ?? null,
+      season: session?.world?.calendar?.currentSeason ?? null,
     });
   }
 
+  const api = await loadApi();
+  const hybrid = await loadHybrid();
+
   if ((path === "/api/start" || path === "/api/career/start") && method === "POST") {
     const body = await readBody(req);
-    session = createSession(Date.now() % 100000);
-    const result = startPlayerCareer(session, {
+    session = api.createSession(Date.now() % 100000);
+    const result = api.startPlayerCareer(session, {
       firstName: body.firstName || "Alex",
       lastName: body.lastName || "Player",
       position: body.position || "CM",
@@ -132,79 +120,103 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
       physicalProfile: body.physicalProfile || "Athletic",
     });
     careerStarted = true;
-    return json(res, 200, { ...result, hub: getHybridHub(session) });
+    return json(res, 200, { ...result, hub: hybrid.getHybridHub(session) });
   }
 
-  if (!careerStarted && path !== "/api/start" && path !== "/api/career/start" && path !== "/api/status") {
+  if (!careerStarted && path !== "/api/start" && path !== "/api/career/start") {
     return json(res, 400, { error: "Start a career first (POST /api/start)" });
   }
 
-  if (path === "/api/hub") return json(res, 200, getHybridHub(session));
-  if (path === "/api/threads") return json(res, 200, { threads: getNarrativeThreads(session) });
+  await ensureSession();
+
+  if (path === "/api/hub") return json(res, 200, hybrid.getHybridHub(session));
+  if (path === "/api/threads") return json(res, 200, { threads: hybrid.getNarrativeThreads(session) });
   if (path === "/api/match/stats") {
     const id = new URL(req.url || "/", "http://x").searchParams.get("id");
-    return json(res, 200, id ? getMatchStatsView(session, id) : getLatestUserMatchStats(session));
+    return json(
+      res,
+      200,
+      id ? api.getMatchStatsView(session, id) : api.getLatestUserMatchStats(session)
+    );
   }
-  if (path === "/api/club/social") return json(res, 200, getClubSocialView(session));
-  if (path === "/api/market") return json(res, 200, { players: listMarketPlayers(session, { limit: 100 }) });
-  if (path === "/api/squad") return json(res, 200, getSquadWithValues(session));
-  if (path === "/api/fixture") return json(res, 200, getNextUserFixture(session));
-  if (path === "/api/agent") return json(res, 200, { advice: getAgentAdvice(session) });
-  if (path === "/api/intl") return json(res, 200, getIntlStatus(session));
-  if (path === "/api/news") {
-    return json(res, 200, { news: getNewsFeed(session.world).slice(-30).reverse() });
-  }
-  if (path === "/api/social") {
-    return json(res, 200, { posts: getSocialFeed(session.world).slice(-30).reverse() });
+  if (path === "/api/club/social") return json(res, 200, api.getClubSocialView(session));
+  if (path === "/api/market")
+    return json(res, 200, { players: api.listMarketPlayers(session, { limit: 100 }) });
+  if (path === "/api/squad") return json(res, 200, api.getSquadWithValues(session));
+  if (path === "/api/fixture") return json(res, 200, api.getNextUserFixture(session));
+  if (path === "/api/agent") return json(res, 200, { advice: api.getAgentAdvice(session) });
+  if (path === "/api/intl") return json(res, 200, api.getIntlStatus(session));
+
+  try {
+    const { getNewsFeed } = await import("../news/engine.js");
+    const { getSocialFeed } = await import("../social/engine.js");
+    if (path === "/api/news") {
+      return json(res, 200, { news: getNewsFeed(session.world).slice(-30).reverse() });
+    }
+    if (path === "/api/social") {
+      return json(res, 200, { posts: getSocialFeed(session.world).slice(-30).reverse() });
+    }
+  } catch (e: any) {
+    if (path === "/api/news" || path === "/api/social") {
+      return json(res, 200, { news: [], posts: [], error: String(e?.message || e) });
+    }
   }
 
   if (path === "/api/advance" && method === "POST") {
-    const result = advanceMatchday(session);
-    return json(res, 200, { ...result, hub: getHybridHub(session) });
+    const result = api.advanceMatchday(session);
+    return json(res, 200, { ...result, hub: hybrid.getHybridHub(session) });
   }
   if (path === "/api/train" && method === "POST") {
     const body = await readBody(req);
-    const player = doTrain(session, body.focus || "Tactical");
-    return json(res, 200, { player, hub: getHybridHub(session) });
+    const player = api.doTrain(session, body.focus || "Tactical");
+    return json(res, 200, { player, hub: hybrid.getHybridHub(session) });
   }
   if (path === "/api/roles" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, setRoleApi(session, body.role, body.instruction));
+    return json(res, 200, hybrid.setRoleApi(session, body.role, body.instruction));
   }
   if (path === "/api/negotiation/open" && method === "POST") {
-    return json(res, 200, openNegotiationApi(session));
+    return json(res, 200, hybrid.openNegotiationApi(session));
   }
   if (path === "/api/negotiation/respond" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, respondNegotiationApi(session, body.action || "mediate"));
+    return json(res, 200, hybrid.respondNegotiationApi(session, body.action || "mediate"));
   }
   if (path === "/api/objectives/claim" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, claimObjectiveApi(session, String(body.objectiveId || body.id || "")));
+    return json(
+      res,
+      200,
+      hybrid.claimObjectiveApi(session, String(body.objectiveId || body.id || ""))
+    );
   }
   if (path === "/api/inbox/read" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, markInboxReadApi(session, body.id));
+    return json(res, 200, hybrid.markInboxApi(session, body.id));
   }
   if (path === "/api/playstyle/spend" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, spendPlayStylePoint(session, String(body.playStyleId || body.id || "")));
+    return json(
+      res,
+      200,
+      hybrid.spendPlayStylePoint(session, String(body.playStyleId || body.id || ""))
+    );
   }
-  if (path === "/api/jobs") return json(res, 200, listJobOffersApi(session));
+  if (path === "/api/jobs") return json(res, 200, hybrid.listJobOffersApi(session));
   if (path === "/api/jobs/refresh" && method === "POST") {
-    return json(res, 200, refreshJobOffersApi(session));
+    return json(res, 200, hybrid.refreshJobOffersApi(session));
   }
   if (path === "/api/jobs/accept" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, takeJobApi(session, String(body.offerId || body.id || "")));
+    return json(res, 200, hybrid.takeJobApi(session, String(body.offerId || body.id || "")));
   }
   if (path === "/api/jobs/decline" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, declineJobApi(session, body.offerId || body.id));
+    return json(res, 200, hybrid.declineJobApi(session, body.offerId || body.id));
   }
   if (path === "/api/match/start" && method === "POST") {
     try {
-      const state = beginPlayableMatch(session);
+      const state = api.beginPlayableMatch(session);
       return json(res, 200, { state });
     } catch (e: any) {
       return json(res, 400, { error: String(e?.message ?? e) });
@@ -212,26 +224,34 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   }
   if (path === "/api/match/action" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, chooseHighlightAction(session, String(body.actionId || body.id || "")));
+    return json(res, 200, api.chooseHighlightAction(session, String(body.actionId || body.id || "")));
   }
   if (path === "/api/match/finish" && method === "POST") {
-    const state = skipToFullTime(session);
-    return json(res, 200, { state, report: getPostMatchReport(session), hub: getHybridHub(session) });
+    const state = api.skipToFullTime(session);
+    return json(res, 200, {
+      state,
+      report: api.getPostMatchReport(session),
+      hub: hybrid.getHybridHub(session),
+    });
   }
   if (path === "/api/season/end" && method === "POST") {
-    return json(res, 200, { ...endSeason(session), hub: getHybridHub(session) });
+    return json(res, 200, { ...api.endSeason(session), hub: hybrid.getHybridHub(session) });
   }
   if (path === "/api/season/next" && method === "POST") {
-    return json(res, 200, { ...nextSeason(session), hub: getHybridHub(session) });
+    return json(res, 200, { ...api.nextSeason(session), hub: hybrid.getHybridHub(session) });
   }
   if (path === "/api/save" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, { path: save(session, body.name || "career") });
+    return json(res, 200, { path: api.save(session, body.name || "career") });
   }
-  if (path === "/api/press") return json(res, 200, { questions: getPress(session) });
+  if (path === "/api/press") return json(res, 200, { questions: api.getPress(session) });
   if (path === "/api/press/answer" && method === "POST") {
     const body = await readBody(req);
-    return json(res, 200, answerPress(session, String(body.questionId), String(body.responseId)));
+    return json(
+      res,
+      200,
+      api.answerPress(session, String(body.questionId), String(body.responseId))
+    );
   }
 
   return json(res, 404, { error: `Unknown API ${path}` });
@@ -247,7 +267,8 @@ const server = createServer(async (req, res) => {
     try {
       await handleApi(req, res, path);
     } catch (e: any) {
-      json(res, 500, { error: String(e?.message ?? e) });
+      console.error("[api]", path, e);
+      json(res, 500, { error: String(e?.message ?? e), stack: String(e?.stack || "") });
     }
     return;
   }
@@ -259,13 +280,18 @@ const server = createServer(async (req, res) => {
     return serveStatic(res, join(publicDir, "app.html"));
   }
 
-  const safe = path.replace(/\.\./g, "");
-  serveStatic(res, join(publicDir, safe));
+  const safePath = path.replace(/\.\./g, "");
+  serveStatic(res, join(publicDir, safePath));
 });
 
 const PORT = Number(process.env.PORT || 3847);
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Football Career Sim`);
-  console.log(`  http://0.0.0.0:${PORT}`);
-  console.log(`  http://localhost:${PORT}\n`);
+  console.log(`Football Career Sim listening on :${PORT}`);
+});
+
+process.on("uncaughtException", (e) => {
+  console.error("[uncaught]", e);
+});
+process.on("unhandledRejection", (e) => {
+  console.error("[unhandled]", e);
 });
