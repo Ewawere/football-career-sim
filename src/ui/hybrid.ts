@@ -25,15 +25,31 @@ function safe<T>(fn: () => T, fallback: T): T {
 }
 
 export function getHybridHub(session: GameSession) {
-  const base = getHub(session);
+  const base = getHub(session) as any;
   const w = session.world;
   safe(() => syncInboxFromState(w), undefined);
+
+  const briefing = safe(() => getPreMatchBriefing(w), null);
+  const postMatch = safe(() => getPostMatchPack(w), null);
+
+  // Normalize player card fields for UI
+  const player = base.player
+    ? {
+        ...base.player,
+        name: base.player.name || base.player.displayName,
+        trust: base.player.trust ?? base.player.managerTrust,
+        club: base.player.club || base.player.clubName,
+      }
+    : base.player;
+
   return {
     ...base,
+    player,
     objectives: safe(() => snapshotObjectives(w), null),
     inbox: safe(() => snapshotInbox(w, 10), { unread: 0, messages: [] }),
-    briefing: safe(() => getPreMatchBriefing(w), null),
-    postMatch: safe(() => getPostMatchPack(w), null),
+    briefing,
+    preMatch: briefing,
+    postMatch,
     matchdaySquad: safe(() => getMatchdaySquadView(w), null),
     medical: safe(() => getMedicalCentre(w), null),
     negotiation: safe(() => snapshotNegotiation(w), null),
