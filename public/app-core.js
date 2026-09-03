@@ -1,8 +1,4 @@
-/**
- * Career Mode UI core - hybrid hub (FM + EA FC)
- */
 const $ = (id) => document.getElementById(id);
-
 let hub = null;
 let view = "hub";
 
@@ -11,10 +7,7 @@ async function api(path, opts) {
     headers: { "Content-Type": "application/json" },
     ...opts,
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(t || r.statusText);
-  }
+  if (!r.ok) throw new Error((await r.text()) || r.statusText);
   return r.json();
 }
 
@@ -40,17 +33,37 @@ async function refresh() {
   return hub;
 }
 
+function renderJobs(offers) {
+  const list = offers || [];
+  return `<div class="card"><h3>Job offers ${list.length ? "(" + list.length + ")" : ""}</h3>
+    <div class="muted">Up to 5 clubs at once, including different leagues, when unemployed as a manager.</div>
+    <div style="margin:8px 0"><button data-action="jobs-refresh">Refresh offers</button></div>
+    ${list.length
+      ? list
+          .map(
+            (o) => `<div class="panel" style="margin:8px 0">
+        <strong>${o.clubName}</strong>
+        <span class="pill">${o.leagueLabel || "League"}</span>
+        <div class="muted">Rep ${o.reputation} · ${o.wageLabel || ""} · ${o.contractYears}y</div>
+        <div class="muted">Board target ~${o.expectations?.leaguePositionMin ?? "-"} · ${o.expectations?.style || ""}</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" data-action="job-accept" data-id="${o.id}">Accept</button>
+          <button data-action="job-decline" data-id="${o.id}">Decline</button>
+        </div>
+      </div>`
+          )
+          .join("")
+      : '<p class="muted">No open offers. Refresh after sackings / season review (manager must be unemployed).</p>'}</div>`;
+}
+
 function renderObjectives(obj) {
-  if (!obj || !obj.objectives || !obj.objectives.length) {
-    return `<div class="card"><h3>Season objectives</h3><p class="muted">Will appear once the season is active.</p></div>`;
-  }
-  return `<div class="card"><h3>Season objectives · ${obj.completed || 0}/${obj.total || 0}</h3>
-    <div class="muted">${obj.progress || 0}% · claim SP when complete</div>
+  if (!obj?.objectives?.length)
+    return `<div class="card"><h3>Season objectives</h3><p class="muted">Appear once the season is active.</p></div>`;
+  return `<div class="card"><h3>Objectives · ${obj.completed || 0}/${obj.total || 0}</h3>
     ${(obj.objectives || [])
       .map(
         (o) => `<div class="panel" style="margin:8px 0">
-      <strong>${o.label}</strong>
-      <div class="muted">${o.description || ""}</div>
+      <strong>${o.label}</strong><div class="muted">${o.description || ""}</div>
       <div>${o.current}/${o.target} ${o.unit || ""} · +${o.rewardSp || 0} SP</div>
       <button class="btn" data-action="claim-obj" data-id="${o.id}" ${!o.completed || o.claimed ? "disabled" : ""}>
         ${o.claimed ? "Claimed" : o.completed ? "Claim" : (o.pct || 0) + "%"}
@@ -60,13 +73,13 @@ function renderObjectives(obj) {
 }
 
 function renderInbox(inbox) {
-  const msgs = (inbox && inbox.messages) || [];
-  return `<div class="card"><h3>Inbox ${inbox && inbox.unread ? "(" + inbox.unread + " unread)" : ""}</h3>
+  const msgs = inbox?.messages || [];
+  return `<div class="card"><h3>Inbox ${inbox?.unread ? "(" + inbox.unread + ")" : ""}</h3>
     ${msgs.length
       ? msgs
           .map(
             (m) => `<div class="panel" style="margin:8px 0;opacity:${m.read ? 0.65 : 1}">
-        <strong>${m.from || "Club"}</strong> · ${m.subject || ""}
+        <strong>${m.from}</strong> · ${m.subject}
         <div class="muted">${m.body || ""}</div>
         ${!m.read ? `<button data-action="inbox-read" data-id="${m.id}">Mark read</button>` : ""}
       </div>`
@@ -75,115 +88,32 @@ function renderInbox(inbox) {
       : '<p class="muted">No messages</p>'}</div>`;
 }
 
-function renderSquad(ms) {
-  if (!ms) return "";
-  const xi = ms.xi || [];
-  return `<div class="card"><h3>Matchday · ${ms.formation || ""}</h3>
-    <p class="muted">${(ms.user && ms.user.standing) || ""}</p>
-    <div class="grid-2">${xi
-      .map(
-        (x) =>
-          `<div class="panel">${x.isUser ? "★ " : ""}${x.name} <span class="pill">${x.position}</span> ${x.ovr}</div>`
-      )
-      .join("")}</div></div>`;
-}
-
-function renderRoles(roles) {
-  if (!roles) return "";
-  return `<div class="card"><h3>Role · ${roles.roleLabel || ""} / ${roles.instructionLabel || ""}</h3>
-    <div>${(roles.availableRoles || [])
-      .map((r) => `<button data-action="set-role" data-role="${r.id}">${r.label}</button> `)
-      .join("")}</div>
-    <div style="margin-top:8px">${(roles.instructions || [])
-      .map((i) => `<button data-action="set-role" data-instruction="${i.id}">${i.label}</button> `)
-      .join("")}</div></div>`;
-}
-
-function renderMedical(med) {
-  if (!med) return "";
-  const tone =
-    med.statusTone === "bad" ? "bad" : med.statusTone === "warn" ? "warn" : "ok";
-  return `<div class="card"><h3>Medical · <span class="pill">${med.statusLabel || ""}</span></h3>
-    <div class="grid-3">
-      <div><span class="pill">Fitness</span> ${med.fitness ?? "-"}</div>
-      <div><span class="pill">Rust</span> ${med.comebackPenalty ?? 0}%</div>
-      <div><span class="pill">Re-injury</span> ${med.recurrenceRisk ?? 0}%</div>
-    </div>
-    ${med.active ? `<div class="panel" style="margin-top:8px"><strong>${med.active.name}</strong> · ${med.active.phase?.label || ""}<div class="muted">${med.active.daysRemaining}d left · ${med.active.phase?.detail || ""}</div></div>` : ""}
-    <ul>${(med.notes || []).map((n) => `<li>${n}</li>`).join("")}</ul></div>`;
-}
-
-function renderNegotiation(neg) {
-  const n = neg || {};
-  return `<div class="card"><h3>Contract</h3>
-    <div class="muted">${n.currentWageWeekly || ""} · ends ${n.endDate || "-"}</div>
-    <div class="grid-2" style="margin-top:8px">
-      <div class="panel">Demand ${n.demandedLabel || "-"}</div>
-      <div class="panel">Offer ${n.offeredLabel || "-"}</div>
-    </div>
-    <div class="muted" style="margin-top:6px">${n.agentNote || n.clubNote || ""}</div>
-    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
-      <button class="btn" data-action="neg-open">Open talks</button>
-      <button data-action="neg-respond" data-neg="accept">Accept</button>
-      <button data-action="neg-respond" data-neg="counter">Counter</button>
-      <button data-action="neg-respond" data-neg="mediate">Agent mediate</button>
-      <button data-action="neg-respond" data-neg="reject">Walk away</button>
-    </div>
-    ${n.lastMessage ? `<p class="muted">${n.lastMessage}</p>` : ""}</div>`;
-}
-
-function renderBriefing() {
-  const b = hub && (hub.briefing || hub.preMatch);
-  if (!b) return "";
-  return `<div class="card"><h3>Pre-match briefing</h3>
-    <div class="grid-3">
-      <div><span class="pill">Form</span> ${b.form ?? "-"}</div>
-      <div><span class="pill">Fitness</span> ${b.fitness ?? "-"}</div>
-      <div><span class="pill">Trust</span> ${b.trust ?? "-"}</div>
-    </div>
-    <ul>${(b.tips || b.notes || []).map((t) => `<li>${t}</li>`).join("")}</ul></div>`;
-}
-
 function renderHub() {
-  if (!hub) return '<div class="card">Loading career hub...</div>';
+  if (!hub) return '<div class="card">Loading...</div>';
   const p = hub.player || {};
   return `
   <div class="card match-poster">
-    <h2>${p.name || p.displayName || "Player"} · ${p.ovr ?? ""} OVR</h2>
-    <div class="muted">${p.position || ""} · Age ${p.age ?? ""} · ${p.club || ""}</div>
-    <div class="grid-3" style="margin-top:12px">
-      <div><span class="pill">Form</span> ${p.form ?? "-"}</div>
-      <div><span class="pill">Fitness</span> ${p.fitness ?? "-"}</div>
-      <div><span class="pill">Trust</span> ${p.trust ?? p.managerTrust ?? "-"}</div>
-    </div>
-    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px">
-      <button class="btn" data-action="advance">Advance matchday</button>
+    <h2>${p.name || p.displayName || "Career"} · ${p.ovr ?? ""} OVR</h2>
+    <div class="muted">${p.position || ""} · ${p.club || ""}</div>
+    <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px">
+      <button class="btn" data-action="advance">Advance</button>
       <button data-action="train" data-focus="Tactical">Train</button>
-      <button data-action="match-start">Play match</button>
-      <button data-action="match-finish">Finish match</button>
+      <button data-action="match-start">Play</button>
+      <button data-action="match-finish">Full time</button>
       <button data-action="save">Save</button>
     </div>
   </div>
-  ${renderBriefing()}
+  ${renderJobs(hub.jobOffers)}
   ${renderObjectives(hub.objectives)}
   ${renderInbox(hub.inbox)}
-  ${renderSquad(hub.matchdaySquad)}
-  ${renderRoles(hub.roles)}
-  ${renderMedical(hub.medical)}
-  ${renderNegotiation(hub.negotiation)}
   `;
 }
 
 function renderNews(items) {
-  if (!items || !items.length)
-    return '<div class="card"><h3>News</h3><p class="muted">No stories yet - advance the calendar.</p></div>';
+  if (!items?.length) return '<div class="card"><h3>News</h3><p class="muted">Advance the calendar for stories.</p></div>';
   return `<div class="card"><h3>News</h3>${items
     .map(
-      (n) => `<div class="panel news-card" style="margin:10px 0">
-      <strong>${n.headline || ""}</strong>
-      <div class="muted">${n.category || ""} · ${n.importance || ""}</div>
-      <p>${n.body || ""}</p>
-    </div>`
+      (n) => `<div class="panel" style="margin:10px 0"><strong>${n.headline || ""}</strong><p>${n.body || ""}</p></div>`
     )
     .join("")}</div>`;
 }
@@ -194,12 +124,8 @@ function render() {
   if (view === "news") {
     content.innerHTML = '<div class="card">Loading news...</div>';
     api("/api/news")
-      .then((d) => {
-        content.innerHTML = renderNews(d.news || []);
-      })
-      .catch((e) => {
-        content.innerHTML = `<div class="card">${e.message}</div>`;
-      });
+      .then((d) => (content.innerHTML = renderNews(d.news || [])))
+      .catch((e) => (content.innerHTML = `<div class="card">${e.message}</div>`));
     return;
   }
   content.innerHTML = renderHub();

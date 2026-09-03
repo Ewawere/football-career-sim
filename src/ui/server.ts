@@ -1,6 +1,5 @@
 /**
  * Playable career web server - mobile UI + sim API.
- * npm start / npm run play:web
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
@@ -39,6 +38,10 @@ import {
   setRoleApi,
   getNarrativeThreads,
   spendPlayStylePoint,
+  listJobOffersApi,
+  takeJobApi,
+  declineJobApi,
+  refreshJobOffersApi,
 } from "./hybrid.js";
 import { getNewsFeed } from "../news/engine.js";
 import { getSocialFeed } from "../social/engine.js";
@@ -47,14 +50,13 @@ let session: GameSession = createSession(Date.now() % 100000);
 let careerStarted = false;
 
 function json(res: ServerResponse, status: number, body: unknown) {
-  const data = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
-  res.end(data);
+  res.end(JSON.stringify(body));
 }
 
 function readBody(req: IncomingMessage): Promise<any> {
@@ -91,9 +93,8 @@ function serveStatic(res: ServerResponse, filePath: string) {
     res.end("Not found");
     return;
   }
-  const body = readFileSync(filePath);
   res.writeHead(200, { "Content-Type": contentType(filePath) });
-  res.end(body);
+  res.end(readFileSync(filePath));
 }
 
 async function handleApi(req: IncomingMessage, res: ServerResponse, path: string) {
@@ -189,6 +190,18 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     const body = await readBody(req);
     return json(res, 200, spendPlayStylePoint(session, String(body.playStyleId || body.id || "")));
   }
+  if (path === "/api/jobs") return json(res, 200, listJobOffersApi(session));
+  if (path === "/api/jobs/refresh" && method === "POST") {
+    return json(res, 200, refreshJobOffersApi(session));
+  }
+  if (path === "/api/jobs/accept" && method === "POST") {
+    const body = await readBody(req);
+    return json(res, 200, takeJobApi(session, String(body.offerId || body.id || "")));
+  }
+  if (path === "/api/jobs/decline" && method === "POST") {
+    const body = await readBody(req);
+    return json(res, 200, declineJobApi(session, body.offerId || body.id));
+  }
   if (path === "/api/match/start" && method === "POST") {
     try {
       const state = beginPlayableMatch(session);
@@ -227,7 +240,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 const publicDir = join(process.cwd(), "public");
 
 const server = createServer(async (req, res) => {
-  const url = new URL(req.url || "/", `http://localhost`);
+  const url = new URL(req.url || "/", "http://localhost");
   const path = url.pathname;
 
   if (path.startsWith("/api/")) {

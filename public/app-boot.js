@@ -1,61 +1,57 @@
 function bindBottomNav() {
-  const nav = document.getElementById("bottomNav");
-  if (!nav) return;
-  nav.querySelectorAll("button[data-view]").forEach((btn) => {
-    btn.onclick = () => setView(btn.getAttribute("data-view"));
-  });
-  document.querySelectorAll("#sideNav button[data-view]").forEach((btn) => {
+  document.querySelectorAll("#bottomNav button[data-view], #sideNav button[data-view]").forEach((btn) => {
     btn.onclick = () => setView(btn.getAttribute("data-view"));
   });
 }
 
 function bindActions() {
   document.body.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-action], [data-act]");
+    const t = e.target.closest("[data-action]");
     if (!t) return;
-    const action = t.getAttribute("data-action") || t.getAttribute("data-act");
+    const action = t.getAttribute("data-action");
     try {
       if (action === "advance") {
         await api("/api/advance", { method: "POST", body: "{}" });
         await refresh();
         toast("Matchday advanced");
       } else if (action === "train") {
-        const focus = t.getAttribute("data-focus") || "Tactical";
-        await api("/api/train", { method: "POST", body: JSON.stringify({ focus }) });
+        await api("/api/train", {
+          method: "POST",
+          body: JSON.stringify({ focus: t.getAttribute("data-focus") || "Tactical" }),
+        });
         await refresh();
-        toast("Training complete");
-      } else if (action === "claim-obj" || action === "claimObj") {
-        const id = t.getAttribute("data-id") || t.getAttribute("data-oid");
+        toast("Training done");
+      } else if (action === "claim-obj") {
         await api("/api/objectives/claim", {
           method: "POST",
-          body: JSON.stringify({ objectiveId: id }),
+          body: JSON.stringify({ objectiveId: t.getAttribute("data-id") }),
         });
         await refresh();
-        toast("Objective claimed");
+        toast("Claimed");
       } else if (action === "inbox-read") {
-        const id = t.getAttribute("data-id");
-        await api("/api/inbox/read", { method: "POST", body: JSON.stringify({ id }) });
-        await refresh();
-      } else if (action === "neg-open") {
-        await api("/api/negotiation/open", { method: "POST", body: "{}" });
-        await refresh();
-        toast("Negotiation opened");
-      } else if (action === "neg-respond") {
-        const act = t.getAttribute("data-neg") || "mediate";
-        await api("/api/negotiation/respond", {
+        await api("/api/inbox/read", {
           method: "POST",
-          body: JSON.stringify({ action: act }),
+          body: JSON.stringify({ id: t.getAttribute("data-id") }),
         });
         await refresh();
-      } else if (action === "set-role") {
-        const role = t.getAttribute("data-role");
-        const instruction = t.getAttribute("data-instruction");
-        await api("/api/roles", {
+      } else if (action === "jobs-refresh") {
+        await api("/api/jobs/refresh", { method: "POST", body: "{}" });
+        await refresh();
+        toast("Job market scanned");
+      } else if (action === "job-accept") {
+        const res = await api("/api/jobs/accept", {
           method: "POST",
-          body: JSON.stringify({ role, instruction }),
+          body: JSON.stringify({ offerId: t.getAttribute("data-id") }),
         });
         await refresh();
-        toast("Role updated");
+        toast(res.ok ? "Job accepted" : "Could not accept");
+      } else if (action === "job-decline") {
+        await api("/api/jobs/decline", {
+          method: "POST",
+          body: JSON.stringify({ offerId: t.getAttribute("data-id") }),
+        });
+        await refresh();
+        toast("Declined");
       } else if (action === "match-start") {
         await api("/api/match/start", { method: "POST", body: "{}" });
         toast("Match started");
@@ -101,7 +97,6 @@ function boot() {
         refresh().then(() => {
           document.getElementById("gate")?.classList.add("hidden");
           document.getElementById("app")?.classList.remove("hidden");
-          bindBottomNav();
         });
       }
     })
