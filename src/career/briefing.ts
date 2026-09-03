@@ -3,7 +3,6 @@
  */
 
 import type { World } from "../world/world.js";
-import { getNextUserFixture } from "../ui/api.js";
 
 export function getPreMatchBriefing(world: World) {
   const pid = world.userPlayerId;
