@@ -1,5 +1,5 @@
 /**
- * Skill points — accelerate near PlayStyle unlocks without bypassing compatibility.
+ * Skill points - career reward currency that can accelerate near PlayStyle unlocks.
  */
 
 import type { Player } from "./player.js";
@@ -44,13 +44,17 @@ export function spendSkillPointTowardPlayStyle(
 ): { ok: boolean; message: string; unlocked?: string[]; upgraded?: string[] } {
   ensurePlayStyleState(player);
   const pts = getSkillPoints(player);
-  if (pts < 1) return { ok: false, message: "No skill points available." };
+  if (pts < 1) {
+    return { ok: false, message: "No skill points available." };
+  }
 
   const def = getPlayStyleDef(playStyleId);
   if (!def) return { ok: false, message: "Unknown PlayStyle." };
 
   const check = checkPlayStyle(player, playStyleId);
-  if (check.blockedReason) return { ok: false, message: check.blockedReason };
+  if (check.blockedReason) {
+    return { ok: false, message: check.blockedReason };
+  }
 
   if (check.canUnlockPlus) {
     const result = evaluatePlayStyleUnlocks(world, player);
@@ -100,11 +104,16 @@ export function spendSkillPointTowardPlayStyle(
   const unlockedNow = result.unlocked.includes(playStyleId);
   const plusNow = result.upgraded.includes(playStyleId);
 
-  let message = `Spent 1 SP \u2192 ${targetKey} +${bump} (need ${targetMin} for ${def.name}).`;
+  let message = `Spent 1 SP -> ${targetKey} +${bump} (need ${targetMin} for ${def.name}).`;
   if (plusNow) message = `Unlocked ${def.name}+!`;
   else if (unlockedNow) message = `Unlocked ${def.name}!`;
 
-  return { ok: true, message, unlocked: result.unlocked, upgraded: result.upgraded };
+  return {
+    ok: true,
+    message,
+    unlocked: result.unlocked,
+    upgraded: result.upgraded,
+  };
 }
 
 function attrOf(player: Player, key: string): number {

@@ -92,7 +92,7 @@ export function spendPlayStylePoint(session: GameSession, playStyleId: string) {
   const player = session.world.players.get(pid);
   if (!player) return { ok: false, message: "No player" };
   try {
-    const result = spendSkillPointTowardPlayStyle(player, playStyleId as any);
+    const result = spendSkillPointTowardPlayStyle(session.world, player, playStyleId as any);
     return {
       ok: true,
       result,
