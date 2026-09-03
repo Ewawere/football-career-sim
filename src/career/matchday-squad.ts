@@ -3,7 +3,7 @@
  */
 
 import type { World } from "../world/world.js";
-import type { EntityId, Position } from "../core/types.js";
+import type { Position } from "../core/types.js";
 import { pickStartingXI, getDepthChart, selectionScore } from "./selection.js";
 import { getActiveInjury } from "../injuries/engine.js";
 import { getManager } from "../managers/generation.js";
@@ -36,7 +36,7 @@ export function getMatchdaySquadView(world: World) {
     const p = world.players.get(id)!;
     const slots = formationSlotList(formation);
     const slot = slots[i] || p.primaryPosition;
-    const { score, reasons } = selectionScore(p, slot as Position, 0.55, world);
+    const { score, reasons } = selectionScore(world, p, slot as Position, 0.55);
     const chart = getDepthChart(world, club.id, p.primaryPosition, 0.55);
     const entry = chart.find((e) => e.playerId === id);
     return {
@@ -59,7 +59,7 @@ export function getMatchdaySquadView(world: World) {
     .map((id) => world.players.get(id)!)
     .filter((p) => p && !p.retired && !used.has(p.id) && !getActiveInjury(world, p.id))
     .map((p) => {
-      const { score } = selectionScore(p, p.primaryPosition, 0.55, world);
+      const { score } = selectionScore(world, p, p.primaryPosition, 0.55);
       return { p, score };
     })
     .sort((a, b) => b.score - a.score)
