@@ -6,8 +6,8 @@ import { nextId } from "../core/id.js";
 import type { EntityId } from "../core/types.js";
 import type { World } from "../world/world.js";
 import type { Club } from "../clubs/club.js";
-import type { JobOffer, Manager, BoardExpectation } from "./types.js";
-import { getManager, getManagers, storeManager, createUserManager } from "./generation.js";
+import type { JobOffer, Manager } from "./types.js";
+import { getManager, getManagers, createUserManager } from "./generation.js";
 import { Events } from "../core/events.js";
 
 export function getJobOffers(world: World): JobOffer[] {
@@ -261,6 +261,51 @@ export function acceptJobOffer(world: World, offerId: string): boolean {
   offer.status = "Accepted";
   club.objectives.leaguePositionMin = offer.expectations.leaguePositionMin;
   return true;
+}
+
+export function declineJobOffer(world: World, offerId?: string): boolean {
+  const offers = getJobOffers(world);
+  if (!offerId) {
+    let any = false;
+    for (const o of offers) {
+      if (o.status === "Open") {
+        o.status = "Declined";
+        any = true;
+      }
+    }
+    return any;
+  }
+  const offer = offers.find((o) => o.id === offerId);
+  if (!offer || offer.status !== "Open") return false;
+  offer.status = "Declined";
+  return true;
+}
+
+/** Snapshot for UI - includes league id when known */
+export function snapshotJobOffers(world: World) {
+  const offers = getJobOffers(world).filter((o) => o.status === "Open");
+  return offers.map((o) => {
+    let league: string | null = null;
+    for (const [compId, table] of world.leagueTables) {
+      if (table.some((r) => r.clubId === o.clubId)) {
+        league = String(compId);
+        break;
+      }
+    }
+    return {
+      id: o.id,
+      clubId: o.clubId,
+      clubName: o.clubName,
+      reputation: o.reputation,
+      wageWeekly: o.wageWeekly,
+      wageLabel: `EUR ${Math.round(o.wageWeekly / 1000)}k/w`,
+      contractYears: o.contractYears,
+      expectations: o.expectations,
+      league,
+      leagueLabel: league || "Domestic",
+      status: o.status,
+    };
+  });
 }
 
 export function startManagerCareer(
