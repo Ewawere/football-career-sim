@@ -5,12 +5,14 @@
 
 import type { ContinuousMatchState, ContinuousPlayer, Vec2 } from "./types.js";
 import { PITCH } from "./types.js";
-import type { RNG } from "../../core/rng.js";
+import { RNG } from "../../core/rng.js";
 
 function dist(a: Vec2, b: Vec2): number {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return Math.sqrt(dx * dx + dy * dy);
+  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
 }
 
 function toward(from: Vec2, to: Vec2, speed: number): Vec2 {
@@ -32,6 +34,7 @@ export function updateAIPlayer(
 
   const ball = state.ball.position;
   const dBall = dist(p.position, ball);
+  const attackDir = p.side === "home" ? 1 : -1;
 
   if (dBall > MID) {
     if (p.target) {
@@ -66,20 +69,33 @@ export function updateAIPlayer(
       if (owner && owner.side !== p.side) {
         p.velocity = toward(p.position, owner.position, 8);
         p.target = owner.position;
-        if (dBall < 2.2 && rng.chance(0.05)) {
-          (p as any)._intent = "tackle";
-        }
-      } else if (p.target) {
-        p.velocity = toward(p.position, p.target, 5);
+        if (dBall < 2.2 && rng.chance(0.15)) (p as any)._intent = "tackle";
+      } else if (owner && owner.side === p.side) {
+        const space: Vec2 = {
+          x: clamp(p.position.x + attackDir * 8, 2, PITCH.width - 2),
+          y: clamp(p.position.y + rng.float(-6, 6), 2, PITCH.height - 2),
+        };
+        p.velocity = toward(p.position, space, 6);
+        p.target = space;
       }
     }
   } else if (p.target) {
     p.velocity = toward(p.position, p.target, 5);
   }
+}
 
-  p.position = {
-    x: Math.max(0.5, Math.min(PITCH.width - 0.5, p.position.x + p.velocity.x * dt)),
-    y: Math.max(0.5, Math.min(PITCH.height - 0.5, p.position.y + p.velocity.y * dt)),
-  };
-  p.stamina = Math.max(0, p.stamina - 0.8 * dt);
+export function updateGK(state: ContinuousMatchState, p: ContinuousPlayer, dt: number): void {
+  if (!p.onPitch) return;
+  const goalX = p.side === "home" ? 2 : PITCH.width - 2;
+  const goal: Vec2 = { x: goalX, y: PITCH.height / 2 };
+  const ball = state.ball.position;
+  if (dist(p.position, ball) < 12 && !state.ball.ownerId) {
+    p.velocity = toward(p.position, ball, 7);
+  } else {
+    const home: Vec2 = {
+      x: goal.x,
+      y: clamp(ball.y, PITCH.height * 0.25, PITCH.height * 0.75),
+    };
+    p.velocity = toward(p.position, home, 5);
+  }
 }
