@@ -105,7 +105,6 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   const api = await loadApi();
   const hybrid = await loadHybrid();
 
-  // Build world only — return club list for picker
   if (path === "/api/start/init" && method === "POST") {
     try {
       console.log("[start/init] building world…");
@@ -139,7 +138,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         console.log("[start] creating world…");
         session = api.createSession(Date.now() % 100000);
       }
-      console.log("[start] placing player", body.clubId || "(auto)");
+      console.log("[start] placing player", body.clubId || "(auto)", body.playArchetype || "");
       const result = api.startPlayerCareer(session, {
         firstName: body.firstName || "Alex",
         lastName: body.lastName || "Player",
@@ -150,6 +149,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         preferredFoot: body.preferredFoot || "Right",
         physicalProfile: body.physicalProfile || "Athletic",
         clubId: body.clubId,
+        playArchetype: body.playArchetype,
+        secondaryPositions: body.secondaryPositions,
       });
       careerStarted = true;
       bootError = null;
