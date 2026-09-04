@@ -4,7 +4,7 @@
 
 import { nextId } from "../core/id.js";
 import type { World } from "../world/world.js";
-import type { Position, PreferredFoot, PhysicalProfile } from "../core/types.js";
+import type { Position, PreferredFoot, PhysicalProfile, EntityId } from "../core/types.js";
 import { createEmptyState, type Player } from "../players/player.js";
 import { calculateOVR, createBaseAttributes } from "../players/attributes.js";
 import { enforceAgeOvrCap } from "../transfers/squad-rules.js";
@@ -21,12 +21,32 @@ export interface CareerCreateOptions {
   physicalProfile?: PhysicalProfile;
   potential?: number;
   startingAbility?: number;
+  /** If set, place at this club instead of auto mid-table */
+  clubId?: EntityId | string;
 }
 
 export interface CareerPlacement {
   player: Player;
   club: Club | null;
   reason: string;
+}
+
+export function listStarterClubs(world: World): Array<{
+  id: string;
+  name: string;
+  nation: string;
+  reputation: number;
+  city: string;
+}> {
+  return [...world.clubs.values()]
+    .sort((a, b) => b.reputation - a.reputation)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      nation: c.nation,
+      reputation: c.reputation,
+      city: c.city,
+    }));
 }
 
 export function createCareerPlayer(world: World, opts: CareerCreateOptions): CareerPlacement {
@@ -36,7 +56,6 @@ export function createCareerPlayer(world: World, opts: CareerCreateOptions): Car
   ca = enforceAgeOvrCap(ca, age);
 
   const attributes = createBaseAttributes(ca);
-  // Bias for position
   if (["ST", "CF", "RW", "LW"].includes(opts.position)) {
     attributes.technical.finishing = Math.min(99, attributes.technical.finishing + 8);
     attributes.physical.pace = Math.min(99, attributes.physical.pace + 6);
@@ -80,10 +99,17 @@ export function createCareerPlayer(world: World, opts: CareerCreateOptions): Car
   if (!(world as any).personalities) (world as any).personalities = new Map();
   (world as any).personalities.set(personality.id, personality);
 
-  // Place at a mid-table club where youth can break through
   const clubs = [...world.clubs.values()].sort((a, b) => a.reputation - b.reputation);
-  const mid = clubs.filter((c) => c.reputation >= 55 && c.reputation <= 75);
-  const club = mid[Math.floor(mid.length / 2)] ?? clubs[Math.floor(clubs.length / 2)] ?? null;
+  let club: Club | null = null;
+
+  if (opts.clubId) {
+    club = world.clubs.get(opts.clubId as EntityId) ?? null;
+  }
+  if (!club) {
+    // Prefer mid-table for a realistic youth breakthrough story
+    const mid = clubs.filter((c) => c.reputation >= 55 && c.reputation <= 78);
+    club = mid[Math.floor(mid.length / 2)] ?? clubs[Math.floor(clubs.length / 2)] ?? null;
+  }
 
   if (club) {
     player.currentClubId = club.id;
@@ -103,10 +129,53 @@ export function createCareerPlayer(world: World, opts: CareerCreateOptions): Car
   world.userPlayerId = player.id;
 
   const reason = club
-    ? `Placed ${player.displayName} (${ovr} OVR / ${potential} POT) at ${club.name} (rep ${club.reputation}) as a prospect.`
+    ? `Signed for ${club.name} (${club.nation}, rep ${club.reputation}) as a prospect — ${ovr} OVR / ${potential} POT.`
     : `Created ${player.displayName} as free agent.`;
 
   return { player, club, reason };
+}
+
+/** Move user to another club before they've played (starter switch). */
+export function reassignStarterClub(world: World, clubId: string): CareerPlacement | null {
+  const pid = world.userPlayerId;
+  if (!pid) return null;
+  const player = world.players.get(pid);
+  const newClub = world.clubs.get(clubId as EntityId);
+  if (!player || !newClub) return null;
+  if (player.careerAppearances > 0) return null;
+
+  const oldId = player.currentClubId;
+  if (oldId) {
+    const old = world.clubs.get(oldId);
+    if (old) {
+      old.squadPlayerIds = old.squadPlayerIds.filter((id) => id !== pid);
+      if (player.contract) {
+        old.finances.currentWageBillWeekly = Math.max(
+          0,
+          old.finances.currentWageBillWeekly - (player.contract.wage ?? 0)
+        );
+      }
+    }
+  }
+
+  player.currentClubId = newClub.id;
+  const wage = player.contract?.wage ?? Math.max(500, Math.round(player.ovr * player.ovr * 3));
+  player.contract = {
+    clubId: newClub.id,
+    wage,
+    startDate: world.calendar.currentDate,
+    endDate: `${parseInt(world.calendar.currentDate.slice(0, 4), 10) + 3}-06-30`,
+    releaseClause: player.contract?.releaseClause ?? null,
+    signedDate: world.calendar.currentDate,
+  };
+  if (!newClub.squadPlayerIds.includes(pid)) newClub.squadPlayerIds.push(pid);
+  newClub.finances.currentWageBillWeekly += wage;
+
+  return {
+    player,
+    club: newClub,
+    reason: `Moved to ${newClub.name} before the season started.`,
+  };
 }
 
 function estimateSimpleValue(ovr: number, pot: number, age: number): number {
