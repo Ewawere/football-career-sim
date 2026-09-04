@@ -130,6 +130,15 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   await ensureSession();
 
   if (path === "/api/hub") return json(res, 200, hybrid.getHybridHub(session));
+  if (path === "/api/comparison") {
+    return json(
+      res,
+      200,
+      hybrid.getTeamComparisonApi
+        ? hybrid.getTeamComparisonApi(session)
+        : { comparison: hybrid.getHybridHub(session).teamComparison }
+    );
+  }
   if (path === "/api/threads") return json(res, 200, { threads: hybrid.getNarrativeThreads(session) });
   if (path === "/api/match/stats") {
     const id = new URL(req.url || "/", "http://x").searchParams.get("id");
