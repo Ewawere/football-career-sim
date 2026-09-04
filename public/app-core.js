@@ -41,8 +41,9 @@ function setView(v) {
 
 async function refresh() {
   hub = await api("/api/hub");
-  if (view === "match") await loadMatchStats();
-  else render();
+  if (view === "match") {
+    await loadMatchStats();
+  } else render();
   return hub;
 }
 
@@ -177,38 +178,21 @@ function renderHub() {
   const trust = p.managerTrust ?? p.trust ?? 0;
   const threads = hub.threads || [];
   const clubName = p.club || "Free agent";
-
   const chips = unlocked.length
     ? unlocked.map((s) => `<span class="chip ${s.plus ? "plus" : ""}">${s.name || s.id}${s.plus ? "+" : ""}</span>`).join("")
     : `<span class="muted">Train & play to unlock PlayStyles</span>`;
-
   const nearRows = near.length
     ? near.map((n) => {
         const miss = Array.isArray(n.missing) ? n.missing.join(", ") : n.missing || "requirements";
-        return `<div class="unlock-row">
-          <div class="unlock-ico">${n.emoji || "◎"}</div>
-          <div style="flex:1">
-            <div class="unlock-title">${n.name || n.id}</div>
-            <div class="muted">missing ${miss}</div>
-          </div>
-          <button class="sp-btn" data-action="ps-spend" data-id="${n.id}">1 SP</button>
-        </div>`;
+        return `<div class="unlock-row"><div class="unlock-ico">${n.emoji || "◎"}</div><div style="flex:1"><div class="unlock-title">${n.name || n.id}</div><div class="muted">missing ${miss}</div></div><button class="sp-btn" data-action="ps-spend" data-id="${n.id}">1 SP</button></div>`;
       }).join("")
     : `<p class="muted">No near unlocks — keep training attributes.</p>`;
-
   const defaultStories = [
     { title: "Breakthrough Moment", body: "Building match rhythm.", icon: "⚡" },
     { title: "Young Lion Rising", body: "Scout attention rising.", icon: "🛡" },
     { title: "Fan Favorite", body: "Trust growing at the club.", icon: "🏟" },
   ];
-  const stories = (threads.length ? threads : defaultStories).slice(0, 3).map((t, i) => `<div class="story">
-      <div class="story-thumb">${t.icon || ["⚡", "🛡", "🏟"][i] || "📰"}</div>
-      <div>
-        <div class="story-title">${t.title || t.name || "Storyline"}<span class="dot-live"></span></div>
-        <div class="story-meta">${t.body || t.summary || t.description || ""}</div>
-      </div>
-    </div>`).join("");
-
+  const stories = (threads.length ? threads : defaultStories).slice(0, 3).map((t, i) => `<div class="story"><div class="story-thumb">${t.icon || ["⚡", "🛡", "🏟"][i] || "📰"}</div><div><div class="story-title">${t.title || t.name || "Storyline"}<span class="dot-live"></span></div><div class="story-meta">${t.body || t.summary || t.description || ""}</div></div></div>`).join("");
   return `
   <div class="anim-stagger">
   <div class="card">
@@ -217,72 +201,43 @@ function renderHub() {
       <div>
         <div class="ovr-badge">◆ ${p.ovr ?? "—"} OVR</div>
         <div class="player-name">${p.name || p.displayName || "Player"}</div>
-        <div class="club-row">
-          ${clubCrest(clubName, 22, "crest-img sm")}
-          ${clubName}
-        </div>
+        <div class="club-row">${clubCrest(clubName, 22, "crest-img sm")} ${clubName}</div>
       </div>
-      <div class="muted" style="text-align:right;font-size:11px;line-height:1.4">
-        ${p.position || ""}<br>Age ${p.age ?? "—"}
-      </div>
+      <div class="muted" style="text-align:right;font-size:11px">${p.position || ""}<br>Age ${p.age ?? "—"}</div>
     </div>
     <div class="meta-row">
       <div><div class="meta-label">Form</div>${formDots(p.form)}</div>
-      <div>
-        <div class="meta-label">Trust</div>
-        <div class="trust-bar"><span data-w="${Math.max(4, Math.min(100, trust))}"></span></div>
-        <div class="trust-pct">${Math.round(trust)}%</div>
-      </div>
-      <div>
-        <div class="meta-label">Foot</div>
-        <div style="font-weight:700;font-size:13px">${p.preferredFoot || "Right"}</div>
-      </div>
+      <div><div class="meta-label">Trust</div><div class="trust-bar"><span data-w="${Math.max(4, Math.min(100, trust))}"></span></div><div class="trust-pct">${Math.round(trust)}%</div></div>
+      <div><div class="meta-label">Foot</div><div style="font-weight:700;font-size:13px">${p.preferredFoot || "Right"}</div></div>
     </div>
   </div>
-
   <div class="stat-strip">
     <div class="stat-cell"><div class="ico">⚽</div><div class="lab">Apps</div><div class="val">${p.apps ?? 0}</div></div>
     <div class="stat-cell"><div class="ico">🥅</div><div class="lab">Goals</div><div class="val">${p.goals ?? 0}</div></div>
     <div class="stat-cell"><div class="ico">👟</div><div class="lab">Assists</div><div class="val">${p.assists ?? 0}</div></div>
     <div class="stat-cell"><div class="ico">$</div><div class="lab">Value</div><div class="val" style="font-size:13px">${p.marketValueLabel || money(p.marketValue)}</div></div>
   </div>
-
-  <div class="card" style="margin-top:11px">
-    <div class="ps-head"><h3>PlayStyles</h3><div class="sp-hex">SP<br>${sp}</div></div>
-    <div class="chips">${chips}</div>
-  </div>
-
+  <div class="card" style="margin-top:11px"><div class="ps-head"><h3>PlayStyles</h3><div class="sp-hex">SP<br>${sp}</div></div><div class="chips">${chips}</div></div>
   <div class="card"><h3 style="margin-bottom:4px">Near unlocks</h3>${nearRows}</div>
-
   <div class="split">
-    <div class="card">
-      <h3 style="margin-bottom:8px">Season Snapshot</h3>
+    <div class="card"><h3 style="margin-bottom:8px">Season Snapshot</h3>
       <div class="table-row hdr"><span>Comp</span><span>Apps</span><span>G-A</span><span>Wage</span></div>
-      <div class="table-row">
-        <strong>League</strong><span>${p.apps ?? 0}</span>
-        <span>${(p.goals ?? 0) + (p.assists ?? 0)}</span><span>${money(p.wage)}</span>
-      </div>
+      <div class="table-row"><strong>League</strong><span>${p.apps ?? 0}</span><span>${(p.goals ?? 0)+(p.assists ?? 0)}</span><span>${money(p.wage)}</span></div>
       <button class="linkish" data-action="set-view" data-view="career" style="margin-top:8px">Full season stats →</button>
     </div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <h3>Storylines <span class="dot-live"></span></h3>
-        <button class="linkish" data-action="set-view" data-view="social">View all</button>
-      </div>
-      ${stories}
+      <div style="display:flex;justify-content:space-between"><h3>Storylines <span class="dot-live"></span></h3>
+      <button class="linkish" data-action="set-view" data-view="social">View all</button></div>${stories}
     </div>
   </div>
-
-  <div class="card">
-    <h3 style="margin-bottom:10px">Quick Actions</h3>
+  <div class="card"><h3 style="margin-bottom:10px">Quick Actions</h3>
     <div class="qa-grid">
       <button class="qa" data-action="train" data-focus="Tactical"><div class="ico">📈</div><div class="lab">Training</div></button>
       <button class="qa" data-action="set-view" data-view="match"><div class="ico">▦</div><div class="lab">Match</div></button>
       <button class="qa" data-action="advance"><div class="ico">📅</div><div class="lab">Calendar</div></button>
       <button class="qa" data-action="neg-open"><div class="ico">💬</div><div class="lab">Contracts</div></button>
     </div>
-  </div>
-  </div>`;
+  </div></div>`;
 }
 
 function renderMatch() {
@@ -301,98 +256,54 @@ function renderMatch() {
   const shA = m.shotsAway ?? 0;
   const xgSum = xgH + xgA || 1;
   const shSum = shH + shA || 1;
-
+  const cmpHtml =
+    typeof renderTeamComparison === "function"
+      ? renderTeamComparison(hub?.teamComparison || window.lastComparison || null)
+      : "";
   return `
   <div class="anim-stagger">
-  <div class="match-header">
-    <h1>Match Center</h1>
-    <div class="muted">${m.status || "Ready"}</div>
-  </div>
-
+  ${cmpHtml}
+  <div class="match-header"><h1>Match Center</h1><div class="muted">${m.status || "Ready"}</div></div>
   <div class="score-card">
     <div class="score-row">
-      <div class="team-block">
-        ${clubCrest(home, 56, "crest-img lg")}
-        <strong style="font-size:13px">${String(home).slice(0, 3).toUpperCase()}</strong>
-      </div>
+      <div class="team-block">${clubCrest(home, 56, "crest-img lg")}<strong style="font-size:13px">${String(home).slice(0,3).toUpperCase()}</strong></div>
       <div>
         <div class="ft-label">${(m.status || "FULL TIME").toUpperCase()}</div>
         <div class="score-num"><span data-count="${hs}">0</span> – <span data-count="${as_}">0</span></div>
         <div class="muted" style="font-size:12px">${m.venue || "Stadium"}</div>
       </div>
-      <div class="team-block">
-        ${clubCrest(away, 56, "crest-img lg")}
-        <strong style="font-size:13px">${String(away).slice(0, 3).toUpperCase()}</strong>
-      </div>
+      <div class="team-block">${clubCrest(away, 56, "crest-img lg")}<strong style="font-size:13px">${String(away).slice(0,3).toUpperCase()}</strong></div>
     </div>
     <div class="you-line">✓ ${youLine}</div>
   </div>
-
   <div class="card">
     <div class="section-label">📊 Match stats</div>
-    <div class="bar-row">
-      <div class="bar-name">Possession</div>
-      <div class="bar-labels"><span>${possH}%</span><span>${possA}%</span></div>
-      <div class="bar-track"><div class="h" data-w="${possH}"></div><div class="a" data-w="${possA}"></div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-name">xG</div>
-      <div class="bar-labels"><span>${xgH.toFixed(2)}</span><span>${xgA.toFixed(2)}</span></div>
-      <div class="bar-track"><div class="h" data-w="${(xgH / xgSum) * 100}"></div><div class="a" data-w="${(xgA / xgSum) * 100}"></div></div>
-    </div>
-    <div class="bar-row">
-      <div class="bar-name">Shots</div>
-      <div class="bar-labels"><span>${shH}</span><span>${shA}</span></div>
-      <div class="bar-track"><div class="h" data-w="${(shH / shSum) * 100}"></div><div class="a" data-w="${(shA / shSum) * 100}"></div></div>
-    </div>
+    <div class="bar-row"><div class="bar-name">Possession</div><div class="bar-labels"><span>${possH}%</span><span>${possA}%</span></div><div class="bar-track"><div class="h" data-w="${possH}"></div><div class="a" data-w="${possA}"></div></div></div>
+    <div class="bar-row"><div class="bar-name">xG</div><div class="bar-labels"><span>${xgH.toFixed(2)}</span><span>${xgA.toFixed(2)}</span></div><div class="bar-track"><div class="h" data-w="${(xgH/xgSum)*100}"></div><div class="a" data-w="${(xgA/xgSum)*100}"></div></div></div>
+    <div class="bar-row"><div class="bar-name">Shots</div><div class="bar-labels"><span>${shH}</span><span>${shA}</span></div><div class="bar-track"><div class="h" data-w="${(shH/shSum)*100}"></div><div class="a" data-w="${(shA/shSum)*100}"></div></div></div>
   </div>
-
   <div class="card">
     <div class="rating-card">
-      <div class="rating-hex">${(hub?.player?.position || "CM").slice(0, 3)}</div>
-      <div>
-        <div class="muted">${hub?.player?.position || "—"} · ${m.minutes || 90}'</div>
-        <div class="rating-big">${typeof you === "number" ? `<span data-count="${you}">0</span>` : you}</div>
-      </div>
-      <div class="rating-stats">
-        <div>Goals <strong>${m.goals ?? 0}</strong></div>
-        <div>Assists <strong>${m.assists ?? 0}</strong></div>
-        <div style="color:var(--teal)">★ Rating ${you}</div>
-      </div>
+      <div class="rating-hex">${(hub?.player?.position || "CM").slice(0,3)}</div>
+      <div><div class="muted">${hub?.player?.position || "—"} · ${m.minutes || 90}'</div>
+        <div class="rating-big">${typeof you === "number" ? `<span data-count="${you}">0</span>` : you}</div></div>
+      <div class="rating-stats"><div>Goals <strong>${m.goals ?? 0}</strong></div><div>Assists <strong>${m.assists ?? 0}</strong></div><div style="color:var(--teal)">★ Rating ${you}</div></div>
     </div>
   </div>
-
-  <div class="mentality">
-    <div style="font-size:18px">🧠</div>
-    <div style="flex:1">
-      <div style="font-weight:700;font-size:13px">AI Mentality</div>
-      <div class="muted">${m.mentality || "Home Attacking · Away Balanced"}</div>
-    </div>
-    <div class="muted">›</div>
-  </div>
-
+  <div class="mentality"><div style="font-size:18px">🧠</div><div style="flex:1"><div style="font-weight:700;font-size:13px">AI Mentality</div><div class="muted">${m.mentality || "Home Attacking · Away Balanced"}</div></div><div class="muted">›</div></div>
   <div class="actions" style="margin-top:14px">
     <button class="btn" data-action="match-start">Play match</button>
     <button class="ghost" data-action="match-finish">Skip to FT</button>
     <button class="ghost" data-action="advance">Advance day</button>
-  </div>
-  </div>`;
+    <button class="ghost" data-action="refresh-cmp">Refresh preview</button>
+  </div></div>`;
 }
 
 function renderSocial() {
   const posts = hub?.social || [];
   const news = hub?.news || [];
-  const items = posts.length
-    ? posts
-    : news.map((n) => ({ author: n.outlet || "Press", text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : "") }));
-  return `<div class="anim-stagger"><div class="card">
-    <h3 style="margin-bottom:8px">Club Social</h3>
-    ${items.length ? items.slice(0, 12).map((p) => `<div class="story">
-      <div class="story-thumb">💬</div>
-      <div><div class="story-title">${p.author || p.club || "Club"}</div>
-      <div class="story-meta">${p.text || p.body || p.headline || ""}</div></div>
-    </div>`).join("") : `<p class="muted">Advance matchdays to fill the feed.</p>`}
-  </div></div>`;
+  const items = posts.length ? posts : news.map((n) => ({ author: n.outlet || "Press", text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : "") }));
+  return `<div class="anim-stagger"><div class="card"><h3 style="margin-bottom:8px">Club Social</h3>${items.length ? items.slice(0,12).map((p) => `<div class="story"><div class="story-thumb">💬</div><div><div class="story-title">${p.author || p.club || "Club"}</div><div class="story-meta">${p.text || p.body || p.headline || ""}</div></div></div>`).join("") : `<p class="muted">Advance matchdays to fill the feed.</p>`}</div></div>`;
 }
 
 function renderCareer() {
@@ -401,72 +312,17 @@ function renderCareer() {
   const neg = hub?.negotiation || {};
   const jobs = hub?.jobOffers || [];
   const p = hub?.player || {};
-  return `
-  <div class="anim-stagger">
-  <div class="card">
-    <div class="hero" style="grid-template-columns:56px 1fr">
-      <div class="face" style="width:52px;height:52px;font-size:16px">${initials(p.name)}</div>
-      <div>
-        <div class="player-name" style="font-size:18px">${p.name || "Player"}</div>
-        <div class="muted">${p.ovr ?? "—"} OVR · ${p.position || ""} · ${clubCrest(p.club || "FC", 18, "crest-img sm")} ${p.club || ""}</div>
-      </div>
-    </div>
-  </div>
-  <div class="card">
-    <h3 style="margin-bottom:6px">Season objectives</h3>
-    ${obj?.objectives?.length ? obj.objectives.map((o) => `<div class="unlock-row">
-          <div style="flex:1"><div class="unlock-title">${o.label}</div>
-          <div class="muted">${o.current}/${o.target} ${o.unit || ""} · +${o.rewardSp || 0} SP</div>
-          <div class="trust-bar" style="margin-top:6px"><span data-w="${o.pct || 0}"></span></div></div>
-          <button class="sp-btn" data-action="claim-obj" data-id="${o.id}" ${!o.completed || o.claimed ? "disabled" : ""}>
-            ${o.claimed ? "✓" : o.completed ? "Claim" : (o.pct || 0) + "%"}
-          </button></div>`).join("") : `<p class="muted">Objectives appear as the season runs.</p>`}
-  </div>
-  <div class="card"><h3>Medical Centre</h3>
-    <p class="muted">${med?.statusLabel || "Available"} · Fitness ${med?.fitness ?? p.fitness ?? "—"}</p></div>
-  <div class="card"><h3>Contracts</h3>
-    <p class="muted">${neg.currentWageWeekly || money(p.wage)} · ends ${neg.endDate || "—"}</p>
-    <div class="actions">
-      <button class="btn" data-action="neg-open">Open talks</button>
-      <button class="ghost" data-action="neg-respond" data-neg="mediate">Mediate</button>
-      <button class="ghost" data-action="neg-respond" data-neg="accept">Accept</button>
-    </div>
-    ${neg.lastMessage ? `<p class="muted" style="margin-top:8px">${neg.lastMessage}</p>` : ""}
-  </div>
-  <div class="card"><h3>Job Centre</h3>
-    <p class="muted">${jobs.length} open managerial offers</p>
-    <button class="ghost" data-action="jobs-refresh">Scan market</button>
-    ${jobs.map((j) => `<div class="unlock-row">
-        <div style="flex:1;display:flex;gap:8px;align-items:center">
-          ${clubCrest(j.clubName, 28, "crest-img md")}
-          <div><div class="unlock-title">${j.clubName}</div>
-          <div class="muted">${j.leagueLabel || ""} · ${j.wageLabel || ""}</div></div>
-        </div>
-        <button class="sp-btn" data-action="job-accept" data-id="${j.id}">Take</button>
-      </div>`).join("")}
-  </div>
-  </div>`;
+  return `<div class="anim-stagger">
+  <div class="card"><div class="hero" style="grid-template-columns:56px 1fr"><div class="face" style="width:52px;height:52px;font-size:16px">${initials(p.name)}</div><div><div class="player-name" style="font-size:18px">${p.name || "Player"}</div><div class="muted">${p.ovr ?? "—"} OVR · ${p.position || ""} · ${clubCrest(p.club || "FC", 18, "crest-img sm")} ${p.club || ""}</div></div></div></div>
+  <div class="card"><h3 style="margin-bottom:6px">Season objectives</h3>${obj?.objectives?.length ? obj.objectives.map((o) => `<div class="unlock-row"><div style="flex:1"><div class="unlock-title">${o.label}</div><div class="muted">${o.current}/${o.target} ${o.unit || ""} · +${o.rewardSp || 0} SP</div><div class="trust-bar" style="margin-top:6px"><span data-w="${o.pct || 0}"></span></div></div><button class="sp-btn" data-action="claim-obj" data-id="${o.id}" ${!o.completed || o.claimed ? "disabled" : ""}>${o.claimed ? "✓" : o.completed ? "Claim" : (o.pct || 0) + "%"}</button></div>`).join("") : `<p class="muted">Objectives appear as the season runs.</p>`}</div>
+  <div class="card"><h3>Medical Centre</h3><p class="muted">${med?.statusLabel || "Available"} · Fitness ${med?.fitness ?? p.fitness ?? "—"}</p></div>
+  <div class="card"><h3>Contracts</h3><p class="muted">${neg.currentWageWeekly || money(p.wage)} · ends ${neg.endDate || "—"}</p><div class="actions"><button class="btn" data-action="neg-open">Open talks</button><button class="ghost" data-action="neg-respond" data-neg="mediate">Mediate</button><button class="ghost" data-action="neg-respond" data-neg="accept">Accept</button></div>${neg.lastMessage ? `<p class="muted" style="margin-top:8px">${neg.lastMessage}</p>` : ""}</div>
+  <div class="card"><h3>Job Centre</h3><p class="muted">${jobs.length} open managerial offers</p><button class="ghost" data-action="jobs-refresh">Scan market</button>${jobs.map((j) => `<div class="unlock-row"><div style="flex:1;display:flex;gap:8px;align-items:center">${clubCrest(j.clubName, 28, "crest-img md")}<div><div class="unlock-title">${j.clubName}</div><div class="muted">${j.leagueLabel || ""} · ${j.wageLabel || ""}</div></div></div><button class="sp-btn" data-action="job-accept" data-id="${j.id}">Take</button></div>`).join("")}</div></div>`;
 }
 
 function renderMore() {
-  return `
-  <div class="anim-stagger">
-  <div class="card"><h3>More</h3>
-    <div class="actions">
-      <button class="btn" data-action="advance">Advance matchday</button>
-      <button class="ghost" data-action="train" data-focus="Tactical">Train</button>
-      <button class="ghost" data-action="train" data-focus="Physical">Gym</button>
-      <button class="ghost" data-action="save">Save</button>
-    </div>
-    <p class="muted" style="margin-top:12px">${hub?.date || ""} · Season ${hub?.season || ""}</p>
-  </div>
-  <div class="card"><h3>Inbox ${hub?.inbox?.unread ? `(${hub.inbox.unread})` : ""}</h3>
-    ${(hub?.inbox?.messages || []).slice(0, 6).map((m) => `<div class="story">
-      <div class="story-thumb">✉</div>
-      <div><div class="story-title">${m.from}</div><div class="story-meta">${m.subject}<br>${m.body || ""}</div></div>
-    </div>`).join("") || `<p class="muted">No messages</p>`}
-  </div>
-  </div>`;
+  return `<div class="anim-stagger"><div class="card"><h3>More</h3><div class="actions"><button class="btn" data-action="advance">Advance matchday</button><button class="ghost" data-action="train" data-focus="Tactical">Train</button><button class="ghost" data-action="train" data-focus="Physical">Gym</button><button class="ghost" data-action="save">Save</button></div><p class="muted" style="margin-top:12px">${hub?.date || ""} · Season ${hub?.season || ""}</p></div>
+  <div class="card"><h3>Inbox ${hub?.inbox?.unread ? `(${hub.inbox.unread})` : ""}</h3>${(hub?.inbox?.messages || []).slice(0,6).map((m) => `<div class="story"><div class="story-thumb">✉</div><div><div class="story-title">${m.from}</div><div class="story-meta">${m.subject}<br>${m.body || ""}</div></div></div>`).join("") || `<p class="muted">No messages</p>`}</div></div>`;
 }
 
 function render() {
