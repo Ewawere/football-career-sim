@@ -1,6 +1,10 @@
 function bindNav() {
   document.querySelectorAll("#bottomNav button[data-view]").forEach((btn) => {
-    btn.onclick = () => setView(btn.getAttribute("data-view"));
+    btn.onclick = () => {
+      const v = btn.getAttribute("data-view");
+      setView(v);
+      if (v === "match") loadMatchStats();
+    };
   });
 }
 
@@ -11,30 +15,16 @@ function bindActions() {
     const action = t.getAttribute("data-action");
     try {
       if (action === "set-view") {
-        setView(t.getAttribute("data-view") || "hub");
+        const v = t.getAttribute("data-view") || "hub";
+        setView(v);
+        if (v === "match") loadMatchStats();
         return;
       }
       if (action === "advance") {
         toast("Advancing…");
-        const res = await api("/api/advance", { method: "POST", body: "{}" });
-        if (res?.result || res?.match || res?.score) {
-          setLastMatch({
-            homeName: res.homeName || res.home,
-            awayName: res.awayName || res.away,
-            homeScore: res.homeScore ?? res.scoreHome,
-            awayScore: res.awayScore ?? res.scoreAway,
-            youRating: res.youRating || res.rating,
-            status: "Full Time",
-            venue: res.venue,
-            possHome: res.possHome,
-            xgHome: res.xgHome,
-            xgAway: res.xgAway,
-            shotsHome: res.shotsHome,
-            shotsAway: res.shotsAway,
-            ...(res.match || {}),
-          });
-        }
+        await api("/api/advance", { method: "POST", body: "{}" });
         await refresh();
+        await loadMatchStats();
         toast("Matchday done");
       } else if (action === "train") {
         await api("/api/train", {
@@ -80,44 +70,19 @@ function bindActions() {
         await refresh();
         toast(res.ok ? "Job accepted" : "Failed");
       } else if (action === "match-start") {
-        const res = await api("/api/match/start", { method: "POST", body: "{}" });
+        await api("/api/match/start", { method: "POST", body: "{}" });
         toast("Match live");
-        if (res?.state) setLastMatch({ status: "Live", ...(res.state || {}) });
         setView("match");
         await refresh();
       } else if (action === "match-finish") {
-        const res = await api("/api/match/finish", { method: "POST", body: "{}" });
-        const report = res?.report || {};
-        setLastMatch({
-          status: "Full Time",
-          homeName: report.homeName || report.home,
-          awayName: report.awayName || report.away,
-          homeScore: report.homeScore ?? report.scoreHome,
-          awayScore: report.awayScore ?? report.scoreAway,
-          youRating: report.userRating || report.rating,
-          youLine: report.userRating
-            ? `You: ${report.userRating}${report.assists ? " · " + report.assists + " assist" : ""}`
-            : undefined,
-          venue: report.venue,
-          possHome: report.possessionHome ?? report.possHome,
-          xgHome: report.xgHome,
-          xgAway: report.xgAway,
-          shotsHome: report.shotsHome,
-          shotsAway: report.shotsAway,
-          keyPasses: report.keyPasses,
-          shots: report.shots,
-          assists: report.assists,
-          minutes: report.minutes || 90,
-          mentality: report.mentality,
-        });
+        await api("/api/match/finish", { method: "POST", body: "{}" });
         await refresh();
+        await loadMatchStats();
         setView("match");
         toast("Full time");
       } else if (action === "save") {
         await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
         toast("Saved");
-      } else if (action === "view-news" || action === "view-career") {
-        setView(action === "view-news" ? "social" : "career");
       }
     } catch (err) {
       console.error(action, err);
