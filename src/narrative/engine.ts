@@ -1,8 +1,6 @@
 /**
  * Narrative Thread Engine
- *
  * Consumes world events and grows multi-beat stories.
- * Rule: if nothing happened in the simulation, no thread advances.
  */
 
 import { nextId } from "../core/id.js";
@@ -35,6 +33,8 @@ function sentimentDelta(s: ThreadBeat["sentiment"]): number {
       return -8;
     case "VeryNegative":
       return -18;
+    default:
+      return 0;
   }
 }
 
@@ -63,7 +63,7 @@ function openThread(
   }
 ): NarrativeThread {
   const seasonId =
-    world.season?.seasonId ?? world.calendar.currentSeason ?? "unknown";
+    (world as any).season?.seasonId ?? world.calendar.currentSeason ?? "unknown";
   const thread: NarrativeThread = {
     id: nextId("nth"),
     kind: opts.kind,
@@ -83,11 +83,7 @@ function openThread(
   return thread;
 }
 
-function appendBeat(
-  thread: NarrativeThread,
-  beat: ThreadBeat,
-  world: World
-): void {
+function appendBeat(thread: NarrativeThread, beat: ThreadBeat, world: World): void {
   if (
     beat.sourceEventId &&
     thread.beats.some((b) => b.sourceEventId === beat.sourceEventId)
@@ -147,12 +143,11 @@ function onTransferCompleted(world: World, payload: any): void {
   const player = world.players.get(playerId);
   if (!player) return;
   const toClub = payload.toClubId ? world.clubs.get(payload.toClubId) : null;
-  const fromClub = payload.fromClubId ? world.clubs.get(payload.fromClubId) : null;
   let t = findActive(world, "transfer_saga", playerId);
   if (!t) {
     openThread(world, {
       kind: "transfer_saga",
-      title: `${player.displayName} transfer",
+      title: `${player.displayName} transfer`,
       playerId,
       clubIds: [payload.fromClubId, payload.toClubId].filter(Boolean),
       tags: ["transfer"],
@@ -168,14 +163,13 @@ function onTransferCompleted(world: World, payload: any): void {
       t,
       {
         date: world.calendar.currentDate,
-        summary: `Deal done${toClub ? ` — ${toClub.name}` : ""}.`,
+        summary: `Deal done${toClub ? ` - ${toClub.name}` : ""}.`,
         sourceEventId: `tx:${payload.transferId ?? playerId}:${world.calendar.currentDate}`,
         sentiment: "Positive",
       },
       world
     );
-    if (t.beats.length === 1) resolveThread(t, world);
-    else resolveThread(t, world, "Transfer completed.");
+    resolveThread(t, world, "Transfer completed.");
   }
 }
 
@@ -188,7 +182,7 @@ function onTransferOffer(world: World, payload: any): void {
   if (!t) {
     openThread(world, {
       kind: "transfer_saga",
-      title: `${player.displayName} transfer saga",
+      title: `${player.displayName} transfer saga`,
       playerId,
       clubIds: [payload.fromClubId, payload.toClubId].filter(Boolean),
       tags: ["transfer", "rumour"],
@@ -218,25 +212,28 @@ function onMatchFinished(world: World, payload: any): void {
   if (!matchId) return;
   const match = world.matches.get(matchId);
   if (!match) return;
+
   const userId = world.userPlayerId;
   if (!userId) return;
-  const stats = match.playerStats.get(userId);
-  if (!stats || stats.minutes < 1) return;
-  const rating = stats.rating / 10;
-  const player = world.players.get(userId)!;
+  const player = world.players.get(userId);
+  if (!player) return;
+  const st = match.playerStats.get(userId);
+  if (!st || st.minutes < 1) return;
 
-  if (rating < 5.8 && stats.minutes >= 45) {
-    let crisis = findActive(world, "form_crisis", userId);
+  const rating = Math.round((st.rating / 10) * 10) / 10;
+
+  if (rating < 5.5 && st.minutes >= 30) {
+    const crisis = findActive(world, "form_crisis", userId);
     if (!crisis) {
       openThread(world, {
         kind: "form_crisis",
-        title: `${player.displayName} under scrutiny",
+        title: `${player.displayName} under scrutiny`,
         playerId: userId,
         clubIds: player.currentClubId ? [player.currentClubId] : [],
         tags: ["form"],
         beat: {
           date: match.date,
-          summary: `Poor display (${rating.toFixed(1)}) — pressure builds.`,
+          summary: `Poor display (${rating.toFixed(1)}) - pressure builds.`,
           sourceEventId: `crisis:${match.id}:${userId}`,
           sentiment: "Negative",
         },
@@ -260,13 +257,42 @@ function onMatchFinished(world: World, payload: any): void {
         crisis,
         {
           date: match.date,
-          summary: `Response: ${rating.toFixed(1)} — pressure eases.`,
+          summary: `Response: ${rating.toFixed(1)} - pressure eases.`,
           sourceEventId: `crisis-end:${match.id}:${userId}`,
           sentiment: "Positive",
         },
         world
       );
       resolveThread(crisis, world, "Form crisis eased after strong display.");
+    }
+
+    // Breakthrough thread for hot form
+    let hot = findActive(world, "breakthrough", userId);
+    if (!hot && rating >= 8) {
+      openThread(world, {
+        kind: "breakthrough",
+        title: `${player.displayName} breakthrough`,
+        playerId: userId,
+        clubIds: player.currentClubId ? [player.currentClubId] : [],
+        tags: ["form", "breakthrough"],
+        beat: {
+          date: match.date,
+          summary: `Standout ${rating.toFixed(1)} performance.`,
+          sourceEventId: `hot:${match.id}:${userId}`,
+          sentiment: "VeryPositive",
+        },
+      });
+    } else if (hot) {
+      appendBeat(
+        hot,
+        {
+          date: match.date,
+          summary: `Another strong showing (${rating.toFixed(1)}).`,
+          sourceEventId: `hot:${match.id}:${userId}`,
+          sentiment: "Positive",
+        },
+        world
+      );
     }
   }
 }
@@ -282,7 +308,7 @@ function onInjury(world: World, payload: any): void {
   if (!t) {
     openThread(world, {
       kind: "injury_comeback",
-      title: `${player.displayName} injury battle",
+      title: `${player.displayName} injury battle`,
       playerId,
       clubIds: player.currentClubId ? [player.currentClubId] : [],
       tags: ["injury"],
@@ -310,114 +336,52 @@ function onInjury(world: World, payload: any): void {
 function onNewsGenerated(world: World, payload: any): void {
   if (payload?.type === "manager_sacked") {
     openThread(world, {
-      kind: "manager_pressure",
-      title: `${payload.clubName ?? "Club"} managerial change",
+      kind: "club_crisis",
+      title: `${payload.clubName || "Club"} manager exit`,
       playerId: null,
       clubIds: payload.clubId ? [payload.clubId] : [],
-      tags: ["manager", "sacked"],
+      tags: ["manager", "sack"],
       beat: {
         date: world.calendar.currentDate,
-        summary: `${payload.name} dismissed by ${payload.clubName}.`,
-        sourceEventId: `sack:${payload.managerId}:${world.calendar.currentDate}`,
+        summary: `${payload.name || "Manager"} leaves ${payload.clubName || "the club"}.`,
+        sourceEventId: `sack:${payload.managerId || payload.clubId}:${world.calendar.currentDate}`,
         sentiment: "Negative",
       },
     });
   }
 
-  if (payload?.type === "manager_hired") {
-    const threads = ((world as any).narrativeThreads ?? []) as NarrativeThread[];
-    const open = threads.find(
-      (t) =>
-        t.status === "active" &&
-        t.kind === "manager_pressure" &&
-        t.clubIds.includes(payload.clubId)
-    );
-    if (open) {
-      appendBeat(
-        open,
-        {
-          date: world.calendar.currentDate,
-          summary: `${payload.name} appointed at ${payload.clubName}.`,
-          sourceEventId: `hire:${payload.managerId}:${world.calendar.currentDate}`,
-          sentiment: "Positive",
-        },
-        world
-      );
-      resolveThread(open, world, "New manager in place.");
-    }
-  }
-
-  if (payload?.type === "player_ousted" && payload.playerId) {
-    const player = world.players.get(payload.playerId);
-    if (player) {
-      openThread(world, {
-        kind: "form_crisis",
-        title: `${player.displayName} exit pressure",
-        playerId: payload.playerId,
-        clubIds: payload.clubId ? [payload.clubId] : [],
-        tags: ["oust", payload.severity ?? "listed"],
-        beat: {
-          date: world.calendar.currentDate,
-          summary: `${player.displayName} faces exit pressure (${payload.severity ?? "listed"}).`,
-          sourceEventId: `oust:${payload.playerId}:${world.calendar.currentDate}`,
-          sentiment: "VeryNegative",
-        },
-      });
-    }
-  }
-
-  if (payload?.type === "player_restored" && payload.playerId) {
-    const crisis = findActive(world, "form_crisis", payload.playerId);
-    if (crisis) {
-      appendBeat(
-        crisis,
-        {
-          date: world.calendar.currentDate,
-          summary: "Restored to favour — transfer list pressure lifted.",
-          sourceEventId: `restore:${payload.playerId}:${world.calendar.currentDate}`,
-          sentiment: "Positive",
-        },
-        world
-      );
-      resolveThread(crisis, world, "Restored to favour.");
-    }
-  }
-
-  if (payload?.type === "award" && payload.playerId) {
-    const player = world.players.get(payload.playerId);
+  if (payload?.type === "award" || payload?.award) {
+    const playerId = (payload.playerId || world.userPlayerId) as EntityId | undefined;
+    if (!playerId) return;
+    const player = world.players.get(playerId);
     if (!player) return;
-    if (!player.isUserControlled && player.reputation < 70) return;
-    let run = findActive(world, "award_run", payload.playerId);
-    const label = payload.awardType ?? "Award";
-    const src = `award:${label}:${payload.playerId}:${payload.seasonId ?? ""}:${payload.month ?? ""}`;
+    const label = String(payload.award || payload.label || "Award");
+    const src = `award:${label}:${playerId}:${world.calendar.currentDate}`;
+
+    let run = findActive(world, "award_run", playerId);
     if (!run) {
       openThread(world, {
         kind: "award_run",
-        title: `${player.displayName} awards",
-        playerId: payload.playerId,
+        title: `${player.displayName} awards run`,
+        playerId,
         clubIds: player.currentClubId ? [player.currentClubId] : [],
         tags: ["award"],
         beat: {
           date: world.calendar.currentDate,
-          summary: `Wins ${label}${payload.position ? ` (${payload.position})` : ""}.`,
+          summary: `Recognised: ${label}.`,
           sourceEventId: src,
           sentiment: "VeryPositive",
         },
       });
     } else {
-      const totwCount =
-        run.beats.filter(
-          (b) =>
-            /TeamOfTheWeek|TOTW/i.test(b.summary) ||
-            /TeamOfTheWeek/i.test(b.sourceEventId ?? "")
-        ).length + (/TeamOfTheWeek/i.test(label) ? 1 : 0);
-      let summary = `Adds ${label} to the collection.`;
+      let summary = `Another honour: ${label}.`;
       let sentiment: ThreadBeat["sentiment"] = "Positive";
-      if (/TeamOfTheWeek/i.test(label) && totwCount >= 3) {
-        summary = `${totwCount}x Team of the Week this season — media push Player of the Month talk.`;
+      const totwCount = run.beats.filter((b) => /Week/i.test(b.summary)).length + 1;
+      if (/Week/i.test(label) && totwCount >= 3) {
+        summary = `${totwCount}x Team of the Week this season - media push Player of the Month talk.`;
         sentiment = "VeryPositive";
       } else if (/Month/i.test(label)) {
-        summary = `Named ${label} — awards run peaks.`;
+        summary = `Named ${label} - awards run peaks.`;
         sentiment = "VeryPositive";
       } else if (/Season|Golden|PlayerOfTheYear/i.test(label)) {
         summary = `Season-defining honour: ${label}.`;
@@ -464,13 +428,9 @@ export function snapshotThreads(
   tags: string[];
   beats: ThreadBeat[];
 }> {
-  let list = [...store(world)].sort(
-    (a, b) => (a.updatedDate < b.updatedDate ? 1 : -1)
-  );
+  let list = [...store(world)].sort((a, b) => (a.updatedDate < b.updatedDate ? 1 : -1));
   if (opts?.playerId) {
-    list = list.filter(
-      (t) => t.playerId === opts.playerId || t.beats.length > 0
-    );
+    list = list.filter((t) => t.playerId === opts.playerId || t.beats.length > 0);
   }
   const limit = opts?.limit ?? 20;
   return list.slice(0, limit).map((t) => ({
@@ -479,7 +439,9 @@ export function snapshotThreads(
     status: t.status,
     title: t.title,
     playerId: t.playerId,
-    playerName: t.playerId ? world.players.get(t.playerId)?.displayName ?? null : null,
+    playerName: t.playerId
+      ? world.players.get(t.playerId)?.displayName ?? null
+      : null,
     sentimentScore: t.sentimentScore,
     beatCount: t.beats.length,
     latestBeat: t.beats[t.beats.length - 1]?.summary ?? "",
