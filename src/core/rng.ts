@@ -31,6 +31,17 @@ export class RNG {
     return arr[Math.floor(this.next() * arr.length)]!;
   }
 
+  /** Fisher–Yates shuffle (mutates and returns the same array). */
+  shuffle<T>(arr: T[]): T[] {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(this.next() * (i + 1));
+      const tmp = arr[i]!;
+      arr[i] = arr[j]!;
+      arr[j] = tmp;
+    }
+    return arr;
+  }
+
   normal(mean: number, std: number): number {
     const u = 1 - this.next();
     const v = this.next();
