@@ -65,7 +65,9 @@ function initials(name) {
 function formDots(form) {
   const n = Math.max(0, Math.min(6, Math.round((Number(form) || 50) / 16.6)));
   let html = "";
-  for (let i = 0; i < 6; i++) html += `<i class="${i < n ? "on" : ""}"></i>`;
+  for (let i = 0; i < 6; i++) {
+    html += `<i data-on="${i < n ? "1" : "0"}"></i>`;
+  }
   const label = form >= 75 ? "Excellent" : form >= 60 ? "Good" : form >= 45 ? "Average" : "Poor";
   return `<div class="form-dots">${html}<span class="form-label">${label}</span></div>`;
 }
@@ -85,6 +87,46 @@ function spValue(p) {
   return s.available ?? s.points ?? s.unspent ?? 0;
 }
 
+function runEnterAnimations(root) {
+  if (!root) return;
+  // Trust / objective bars: width 0 -> target
+  root.querySelectorAll("[data-w]").forEach((el, i) => {
+    const w = el.getAttribute("data-w");
+    el.style.width = "0%";
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        el.style.width = w + "%";
+      }, 40 + i * 40);
+    });
+  });
+  // Form dots sequential
+  root.querySelectorAll(".form-dots i[data-on='1']").forEach((dot, i) => {
+    setTimeout(() => dot.classList.add("on"), 120 + i * 70);
+  });
+  // Score flash on match view
+  const sc = root.querySelector(".score-card");
+  if (sc && view === "match") {
+    sc.classList.add("ft-flash");
+    setTimeout(() => sc.classList.remove("ft-flash"), 1000);
+  }
+  // Count-up score numbers
+  root.querySelectorAll("[data-count]").forEach((el) => {
+    const target = Number(el.getAttribute("data-count"));
+    if (Number.isNaN(target)) return;
+    const isFloat = String(el.getAttribute("data-count")).includes(".");
+    const start = performance.now();
+    const dur = 650;
+    function tick(now) {
+      const t = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const val = target * eased;
+      el.textContent = isFloat ? val.toFixed(1) : String(Math.round(val));
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
 async function loadMatchStats() {
   try {
     const data = await api("/api/match/stats");
@@ -93,9 +135,10 @@ async function loadMatchStats() {
       const away = data.away || {};
       const hs = home.stats || {};
       const as_ = away.stats || {};
-      const user = (data.ratings || []).find((r) => r.id && hub?.player?.id && r.id === hub.player.id)
-        || (data.ratings || []).find((r) => r.name === hub?.player?.name)
-        || null;
+      const user =
+        (data.ratings || []).find((r) => r.id && hub?.player?.id && r.id === hub.player.id) ||
+        (data.ratings || []).find((r) => r.name === hub?.player?.name) ||
+        null;
       lastMatch = {
         status: "Full Time",
         homeName: home.name || home.short || "Home",
@@ -179,6 +222,7 @@ function renderHub() {
     .join("");
 
   return `
+  <div class="anim-stagger">
   <div class="card">
     <div class="hero">
       <div class="face">${initials(p.name || p.displayName)}</div>
@@ -201,7 +245,7 @@ function renderHub() {
       </div>
       <div>
         <div class="meta-label">Trust</div>
-        <div class="trust-bar"><span style="width:${Math.max(4, Math.min(100, trust))}%"></span></div>
+        <div class="trust-bar"><span data-w="${Math.max(4, Math.min(100, trust))}"></span></div>
         <div class="trust-pct">${Math.round(trust)}%</div>
       </div>
       <div>
@@ -261,7 +305,7 @@ function renderHub() {
       <button class="qa" data-action="neg-open"><div class="ico">💬</div><div class="lab">Contracts</div></button>
     </div>
   </div>
-  `;
+  </div>`;
 }
 
 function renderMatch() {
@@ -282,6 +326,7 @@ function renderMatch() {
   const shSum = shH + shA || 1;
 
   return `
+  <div class="anim-stagger">
   <div class="match-header">
     <h1>Match Center</h1>
     <div class="muted">${m.status || "Ready"}</div>
@@ -295,7 +340,7 @@ function renderMatch() {
       </div>
       <div>
         <div class="ft-label">${(m.status || "FULL TIME").toUpperCase()}</div>
-        <div class="score-num">${hs} – ${as_}</div>
+        <div class="score-num"><span data-count="${hs}">0</span> – <span data-count="${as_}">0</span></div>
         <div class="muted" style="font-size:12px">${m.venue || "Stadium"}</div>
       </div>
       <div class="team-block">
@@ -311,17 +356,17 @@ function renderMatch() {
     <div class="bar-row">
       <div class="bar-name">Possession</div>
       <div class="bar-labels"><span>${possH}%</span><span>${possA}%</span></div>
-      <div class="bar-track"><div class="h" style="width:${possH}%"></div><div class="a" style="width:${possA}%"></div></div>
+      <div class="bar-track"><div class="h" data-w="${possH}"></div><div class="a" data-w="${possA}"></div></div>
     </div>
     <div class="bar-row">
       <div class="bar-name">xG</div>
       <div class="bar-labels"><span>${xgH.toFixed(2)}</span><span>${xgA.toFixed(2)}</span></div>
-      <div class="bar-track"><div class="h" style="width:${(xgH / xgSum) * 100}%"></div><div class="a" style="width:${(xgA / xgSum) * 100}%"></div></div>
+      <div class="bar-track"><div class="h" data-w="${(xgH / xgSum) * 100}"></div><div class="a" data-w="${(xgA / xgSum) * 100}"></div></div>
     </div>
     <div class="bar-row">
       <div class="bar-name">Shots</div>
       <div class="bar-labels"><span>${shH}</span><span>${shA}</span></div>
-      <div class="bar-track"><div class="h" style="width:${(shH / shSum) * 100}%"></div><div class="a" style="width:${(shA / shSum) * 100}%"></div></div>
+      <div class="bar-track"><div class="h" data-w="${(shH / shSum) * 100}"></div><div class="a" data-w="${(shA / shSum) * 100}"></div></div>
     </div>
   </div>
 
@@ -330,7 +375,7 @@ function renderMatch() {
       <div class="rating-hex">${(hub?.player?.position || "CM").slice(0, 3)}</div>
       <div>
         <div class="muted">${hub?.player?.position || "—"} · ${m.minutes || 90}'</div>
-        <div class="rating-big">${you}</div>
+        <div class="rating-big">${typeof you === "number" ? `<span data-count="${you}">0</span>` : you}</div>
       </div>
       <div class="rating-stats">
         <div>Goals <strong>${m.goals ?? 0}</strong></div>
@@ -354,7 +399,7 @@ function renderMatch() {
     <button class="ghost" data-action="match-finish">Skip to FT</button>
     <button class="ghost" data-action="advance">Advance day</button>
   </div>
-  `;
+  </div>`;
 }
 
 function renderSocial() {
@@ -362,17 +407,27 @@ function renderSocial() {
   const news = hub?.news || [];
   const items = posts.length
     ? posts
-    : news.map((n) => ({ author: n.outlet || "Press", text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : "") }));
-  return `<div class="card">
+    : news.map((n) => ({
+        author: n.outlet || "Press",
+        text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : ""),
+      }));
+  return `<div class="anim-stagger"><div class="card">
     <h3 style="margin-bottom:8px">Club Social</h3>
-    ${items.length ? items.slice(0, 12).map((p) => `<div class="story">
+    ${items.length
+      ? items
+          .slice(0, 12)
+          .map(
+            (p) => `<div class="story">
       <div class="story-thumb">💬</div>
       <div>
         <div class="story-title">${p.author || p.club || "Club"}</div>
         <div class="story-meta">${p.text || p.body || p.headline || ""}</div>
       </div>
-    </div>`).join("") : `<p class="muted">Advance matchdays to fill the feed.</p>`}
-  </div>`;
+    </div>`
+          )
+          .join("")
+      : `<p class="muted">Advance matchdays to fill the feed.</p>`}
+  </div></div>`;
 }
 
 function renderCareer() {
@@ -382,6 +437,7 @@ function renderCareer() {
   const jobs = hub?.jobOffers || [];
   const p = hub?.player || {};
   return `
+  <div class="anim-stagger">
   <div class="card">
     <div class="hero" style="grid-template-columns:56px 1fr">
       <div class="face" style="width:52px;height:52px;font-size:16px">${initials(p.name)}</div>
@@ -400,7 +456,7 @@ function renderCareer() {
               (o) => `<div class="unlock-row">
           <div style="flex:1"><div class="unlock-title">${o.label}</div>
           <div class="muted">${o.current}/${o.target} ${o.unit || ""} · +${o.rewardSp || 0} SP</div>
-          <div class="trust-bar" style="margin-top:6px"><span style="width:${o.pct || 0}%"></span></div></div>
+          <div class="trust-bar" style="margin-top:6px"><span data-w="${o.pct || 0}"></span></div></div>
           <button class="sp-btn" data-action="claim-obj" data-id="${o.id}" ${!o.completed || o.claimed ? "disabled" : ""}>
             ${o.claimed ? "✓" : o.completed ? "Claim" : (o.pct || 0) + "%"}
           </button></div>`
@@ -437,11 +493,12 @@ function renderCareer() {
       )
       .join("")}
   </div>
-  `;
+  </div>`;
 }
 
 function renderMore() {
   return `
+  <div class="anim-stagger">
   <div class="card">
     <h3>More</h3>
     <div class="actions">
@@ -464,7 +521,7 @@ function renderMore() {
       )
       .join("") || `<p class="muted">No messages</p>`}
   </div>
-  `;
+  </div>`;
 }
 
 function render() {
@@ -476,6 +533,7 @@ function render() {
   else if (view === "career") content.innerHTML = renderCareer();
   else if (view === "more") content.innerHTML = renderMore();
   else content.innerHTML = renderHub();
+  requestAnimationFrame(() => runEnterAnimations(content));
 }
 
 window.api = api;
