@@ -52,6 +52,14 @@ function hashStr(s) {
   return Math.abs(h);
 }
 
+function clubCrest(name, size, cls) {
+  if (typeof Crests !== "undefined" && Crests.crestImgHtml) {
+    return Crests.crestImgHtml(name, size || 48, cls || "crest-img lg");
+  }
+  const letters = String(name || "FC").slice(0, 3).toUpperCase();
+  return `<span class="team-crest" style="${crestStyle(name)}">${letters}</span>`;
+}
+
 function crestStyle(name) {
   const [a, b] = CREST_PALETTES[hashStr(name) % CREST_PALETTES.length];
   return `background:linear-gradient(145deg,${a},${b})`;
@@ -65,9 +73,7 @@ function initials(name) {
 function formDots(form) {
   const n = Math.max(0, Math.min(6, Math.round((Number(form) || 50) / 16.6)));
   let html = "";
-  for (let i = 0; i < 6; i++) {
-    html += `<i data-on="${i < n ? "1" : "0"}"></i>`;
-  }
+  for (let i = 0; i < 6; i++) html += `<i data-on="${i < n ? "1" : "0"}"></i>`;
   const label = form >= 75 ? "Excellent" : form >= 60 ? "Good" : form >= 45 ? "Average" : "Poor";
   return `<div class="form-dots">${html}<span class="form-label">${label}</span></div>`;
 }
@@ -89,7 +95,6 @@ function spValue(p) {
 
 function runEnterAnimations(root) {
   if (!root) return;
-  // Trust / objective bars: width 0 -> target
   root.querySelectorAll("[data-w]").forEach((el, i) => {
     const w = el.getAttribute("data-w");
     el.style.width = "0%";
@@ -99,17 +104,14 @@ function runEnterAnimations(root) {
       }, 40 + i * 40);
     });
   });
-  // Form dots sequential
   root.querySelectorAll(".form-dots i[data-on='1']").forEach((dot, i) => {
     setTimeout(() => dot.classList.add("on"), 120 + i * 70);
   });
-  // Score flash on match view
   const sc = root.querySelector(".score-card");
   if (sc && view === "match") {
     sc.classList.add("ft-flash");
     setTimeout(() => sc.classList.remove("ft-flash"), 1000);
   }
-  // Count-up score numbers
   root.querySelectorAll("[data-count]").forEach((el) => {
     const target = Number(el.getAttribute("data-count"));
     if (Number.isNaN(target)) return;
@@ -145,7 +147,6 @@ async function loadMatchStats() {
         awayName: away.name || away.short || "Away",
         homeScore: data.score ? Number(String(data.score).split(/[–-]/)[0]) : 0,
         awayScore: data.score ? Number(String(data.score).split(/[–-]/)[1]) : 0,
-        scoreRaw: data.score,
         possHome: hs.possession ?? 50,
         xgHome: hs.xG ?? 0,
         xgAway: as_.xG ?? 0,
@@ -156,17 +157,13 @@ async function loadMatchStats() {
           ? `You: ${user.rating}${user.assists ? ` · ${user.assists} assist` : ""}${user.goals ? ` · ${user.goals} goal` : ""}`
           : undefined,
         minutes: user?.minutes || 90,
-        keyPasses: user?.keyPasses ?? 0,
-        shots: user?.shots ?? 0,
         assists: user?.assists ?? 0,
         goals: user?.goals ?? 0,
         venue: data.venue || "Stadium",
         mentality: data.mentality || "Home Attacking · Away Balanced",
       };
     }
-  } catch (_) {
-    /* keep lastMatch */
-  }
+  } catch (_) {}
   render();
 }
 
@@ -182,16 +179,13 @@ function renderHub() {
   const clubName = p.club || "Free agent";
 
   const chips = unlocked.length
-    ? unlocked
-        .map((s) => `<span class="chip ${s.plus ? "plus" : ""}">${s.name || s.id}${s.plus ? "+" : ""}</span>`)
-        .join("")
+    ? unlocked.map((s) => `<span class="chip ${s.plus ? "plus" : ""}">${s.name || s.id}${s.plus ? "+" : ""}</span>`).join("")
     : `<span class="muted">Train & play to unlock PlayStyles</span>`;
 
   const nearRows = near.length
-    ? near
-        .map((n) => {
-          const miss = Array.isArray(n.missing) ? n.missing.join(", ") : n.missing || "requirements";
-          return `<div class="unlock-row">
+    ? near.map((n) => {
+        const miss = Array.isArray(n.missing) ? n.missing.join(", ") : n.missing || "requirements";
+        return `<div class="unlock-row">
           <div class="unlock-ico">${n.emoji || "◎"}</div>
           <div style="flex:1">
             <div class="unlock-title">${n.name || n.id}</div>
@@ -199,8 +193,7 @@ function renderHub() {
           </div>
           <button class="sp-btn" data-action="ps-spend" data-id="${n.id}">1 SP</button>
         </div>`;
-        })
-        .join("")
+      }).join("")
     : `<p class="muted">No near unlocks — keep training attributes.</p>`;
 
   const defaultStories = [
@@ -208,18 +201,13 @@ function renderHub() {
     { title: "Young Lion Rising", body: "Scout attention rising.", icon: "🛡" },
     { title: "Fan Favorite", body: "Trust growing at the club.", icon: "🏟" },
   ];
-  const stories = (threads.length ? threads : defaultStories)
-    .slice(0, 3)
-    .map(
-      (t, i) => `<div class="story">
+  const stories = (threads.length ? threads : defaultStories).slice(0, 3).map((t, i) => `<div class="story">
       <div class="story-thumb">${t.icon || ["⚡", "🛡", "🏟"][i] || "📰"}</div>
       <div>
         <div class="story-title">${t.title || t.name || "Storyline"}<span class="dot-live"></span></div>
         <div class="story-meta">${t.body || t.summary || t.description || ""}</div>
       </div>
-    </div>`
-    )
-    .join("");
+    </div>`).join("");
 
   return `
   <div class="anim-stagger">
@@ -230,7 +218,7 @@ function renderHub() {
         <div class="ovr-badge">◆ ${p.ovr ?? "—"} OVR</div>
         <div class="player-name">${p.name || p.displayName || "Player"}</div>
         <div class="club-row">
-          <span class="crest" style="${crestStyle(clubName)}">${String(clubName).slice(0, 1)}</span>
+          ${clubCrest(clubName, 22, "crest-img sm")}
           ${clubName}
         </div>
       </div>
@@ -239,10 +227,7 @@ function renderHub() {
       </div>
     </div>
     <div class="meta-row">
-      <div>
-        <div class="meta-label">Form</div>
-        ${formDots(p.form)}
-      </div>
+      <div><div class="meta-label">Form</div>${formDots(p.form)}</div>
       <div>
         <div class="meta-label">Trust</div>
         <div class="trust-bar"><span data-w="${Math.max(4, Math.min(100, trust))}"></span></div>
@@ -263,27 +248,19 @@ function renderHub() {
   </div>
 
   <div class="card" style="margin-top:11px">
-    <div class="ps-head">
-      <h3>PlayStyles</h3>
-      <div class="sp-hex">SP<br>${sp}</div>
-    </div>
+    <div class="ps-head"><h3>PlayStyles</h3><div class="sp-hex">SP<br>${sp}</div></div>
     <div class="chips">${chips}</div>
   </div>
 
-  <div class="card">
-    <h3 style="margin-bottom:4px">Near unlocks</h3>
-    ${nearRows}
-  </div>
+  <div class="card"><h3 style="margin-bottom:4px">Near unlocks</h3>${nearRows}</div>
 
   <div class="split">
     <div class="card">
       <h3 style="margin-bottom:8px">Season Snapshot</h3>
       <div class="table-row hdr"><span>Comp</span><span>Apps</span><span>G-A</span><span>Wage</span></div>
       <div class="table-row">
-        <strong>League</strong>
-        <span>${p.apps ?? 0}</span>
-        <span>${(p.goals ?? 0) + (p.assists ?? 0)}</span>
-        <span>${money(p.wage)}</span>
+        <strong>League</strong><span>${p.apps ?? 0}</span>
+        <span>${(p.goals ?? 0) + (p.assists ?? 0)}</span><span>${money(p.wage)}</span>
       </div>
       <button class="linkish" data-action="set-view" data-view="career" style="margin-top:8px">Full season stats →</button>
     </div>
@@ -335,7 +312,7 @@ function renderMatch() {
   <div class="score-card">
     <div class="score-row">
       <div class="team-block">
-        <div class="team-crest" style="${crestStyle(home)}">${String(home).slice(0, 3).toUpperCase()}</div>
+        ${clubCrest(home, 56, "crest-img lg")}
         <strong style="font-size:13px">${String(home).slice(0, 3).toUpperCase()}</strong>
       </div>
       <div>
@@ -344,7 +321,7 @@ function renderMatch() {
         <div class="muted" style="font-size:12px">${m.venue || "Stadium"}</div>
       </div>
       <div class="team-block">
-        <div class="team-crest" style="${crestStyle(away)}">${String(away).slice(0, 3).toUpperCase()}</div>
+        ${clubCrest(away, 56, "crest-img lg")}
         <strong style="font-size:13px">${String(away).slice(0, 3).toUpperCase()}</strong>
       </div>
     </div>
@@ -407,26 +384,14 @@ function renderSocial() {
   const news = hub?.news || [];
   const items = posts.length
     ? posts
-    : news.map((n) => ({
-        author: n.outlet || "Press",
-        text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : ""),
-      }));
+    : news.map((n) => ({ author: n.outlet || "Press", text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : "") }));
   return `<div class="anim-stagger"><div class="card">
     <h3 style="margin-bottom:8px">Club Social</h3>
-    ${items.length
-      ? items
-          .slice(0, 12)
-          .map(
-            (p) => `<div class="story">
+    ${items.length ? items.slice(0, 12).map((p) => `<div class="story">
       <div class="story-thumb">💬</div>
-      <div>
-        <div class="story-title">${p.author || p.club || "Club"}</div>
-        <div class="story-meta">${p.text || p.body || p.headline || ""}</div>
-      </div>
-    </div>`
-          )
-          .join("")
-      : `<p class="muted">Advance matchdays to fill the feed.</p>`}
+      <div><div class="story-title">${p.author || p.club || "Club"}</div>
+      <div class="story-meta">${p.text || p.body || p.headline || ""}</div></div>
+    </div>`).join("") : `<p class="muted">Advance matchdays to fill the feed.</p>`}
   </div></div>`;
 }
 
@@ -443,34 +408,23 @@ function renderCareer() {
       <div class="face" style="width:52px;height:52px;font-size:16px">${initials(p.name)}</div>
       <div>
         <div class="player-name" style="font-size:18px">${p.name || "Player"}</div>
-        <div class="muted">${p.ovr ?? "—"} OVR · ${p.position || ""} · ${p.club || ""}</div>
+        <div class="muted">${p.ovr ?? "—"} OVR · ${p.position || ""} · ${clubCrest(p.club || "FC", 18, "crest-img sm")} ${p.club || ""}</div>
       </div>
     </div>
   </div>
   <div class="card">
     <h3 style="margin-bottom:6px">Season objectives</h3>
-    ${
-      obj?.objectives?.length
-        ? obj.objectives
-            .map(
-              (o) => `<div class="unlock-row">
+    ${obj?.objectives?.length ? obj.objectives.map((o) => `<div class="unlock-row">
           <div style="flex:1"><div class="unlock-title">${o.label}</div>
           <div class="muted">${o.current}/${o.target} ${o.unit || ""} · +${o.rewardSp || 0} SP</div>
           <div class="trust-bar" style="margin-top:6px"><span data-w="${o.pct || 0}"></span></div></div>
           <button class="sp-btn" data-action="claim-obj" data-id="${o.id}" ${!o.completed || o.claimed ? "disabled" : ""}>
             ${o.claimed ? "✓" : o.completed ? "Claim" : (o.pct || 0) + "%"}
-          </button></div>`
-            )
-            .join("")
-        : `<p class="muted">Objectives appear as the season runs.</p>`
-    }
+          </button></div>`).join("") : `<p class="muted">Objectives appear as the season runs.</p>`}
   </div>
-  <div class="card">
-    <h3>Medical Centre</h3>
-    <p class="muted">${med?.statusLabel || "Available"} · Fitness ${med?.fitness ?? p.fitness ?? "—"}</p>
-  </div>
-  <div class="card">
-    <h3>Contracts</h3>
+  <div class="card"><h3>Medical Centre</h3>
+    <p class="muted">${med?.statusLabel || "Available"} · Fitness ${med?.fitness ?? p.fitness ?? "—"}</p></div>
+  <div class="card"><h3>Contracts</h3>
     <p class="muted">${neg.currentWageWeekly || money(p.wage)} · ends ${neg.endDate || "—"}</p>
     <div class="actions">
       <button class="btn" data-action="neg-open">Open talks</button>
@@ -479,19 +433,17 @@ function renderCareer() {
     </div>
     ${neg.lastMessage ? `<p class="muted" style="margin-top:8px">${neg.lastMessage}</p>` : ""}
   </div>
-  <div class="card">
-    <h3>Job Centre</h3>
+  <div class="card"><h3>Job Centre</h3>
     <p class="muted">${jobs.length} open managerial offers</p>
     <button class="ghost" data-action="jobs-refresh">Scan market</button>
-    ${jobs
-      .map(
-        (j) => `<div class="unlock-row">
-        <div style="flex:1"><div class="unlock-title">${j.clubName}</div>
-        <div class="muted">${j.leagueLabel || ""} · ${j.wageLabel || ""}</div></div>
+    ${jobs.map((j) => `<div class="unlock-row">
+        <div style="flex:1;display:flex;gap:8px;align-items:center">
+          ${clubCrest(j.clubName, 28, "crest-img md")}
+          <div><div class="unlock-title">${j.clubName}</div>
+          <div class="muted">${j.leagueLabel || ""} · ${j.wageLabel || ""}</div></div>
+        </div>
         <button class="sp-btn" data-action="job-accept" data-id="${j.id}">Take</button>
-      </div>`
-      )
-      .join("")}
+      </div>`).join("")}
   </div>
   </div>`;
 }
@@ -499,8 +451,7 @@ function renderCareer() {
 function renderMore() {
   return `
   <div class="anim-stagger">
-  <div class="card">
-    <h3>More</h3>
+  <div class="card"><h3>More</h3>
     <div class="actions">
       <button class="btn" data-action="advance">Advance matchday</button>
       <button class="ghost" data-action="train" data-focus="Tactical">Train</button>
@@ -509,17 +460,11 @@ function renderMore() {
     </div>
     <p class="muted" style="margin-top:12px">${hub?.date || ""} · Season ${hub?.season || ""}</p>
   </div>
-  <div class="card">
-    <h3>Inbox ${hub?.inbox?.unread ? `(${hub.inbox.unread})` : ""}</h3>
-    ${(hub?.inbox?.messages || [])
-      .slice(0, 6)
-      .map(
-        (m) => `<div class="story">
+  <div class="card"><h3>Inbox ${hub?.inbox?.unread ? `(${hub.inbox.unread})` : ""}</h3>
+    ${(hub?.inbox?.messages || []).slice(0, 6).map((m) => `<div class="story">
       <div class="story-thumb">✉</div>
       <div><div class="story-title">${m.from}</div><div class="story-meta">${m.subject}<br>${m.body || ""}</div></div>
-    </div>`
-      )
-      .join("") || `<p class="muted">No messages</p>`}
+    </div>`).join("") || `<p class="muted">No messages</p>`}
   </div>
   </div>`;
 }
@@ -541,7 +486,5 @@ window.refresh = refresh;
 window.setView = setView;
 window.toast = toast;
 window.$ = $;
-window.setLastMatch = (m) => {
-  lastMatch = m;
-};
+window.setLastMatch = (m) => { lastMatch = m; };
 window.loadMatchStats = loadMatchStats;
