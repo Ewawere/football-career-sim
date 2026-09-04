@@ -5,7 +5,7 @@ function bindNav() {
       setView(v);
       if (v === "match") {
         loadMatchStats();
-        loadComparison();
+        if (typeof loadComparison === "function") loadComparison();
       }
     };
   });
@@ -17,11 +17,10 @@ async function loadComparison() {
   try {
     const data = await api("/api/comparison");
     lastComparison = data.comparison || null;
+    window.lastComparison = lastComparison;
     if (hub) hub.teamComparison = lastComparison;
     if (view === "match") render();
-  } catch (_) {
-    /* optional */
-  }
+  } catch (_) {}
 }
 window.loadComparison = loadComparison;
 
@@ -120,24 +119,41 @@ async function startCareerFromGate() {
   const firstName = document.getElementById("firstName")?.value || "Jordan";
   const lastName = document.getElementById("lastName")?.value || "Okonkwo";
   const position = document.getElementById("position")?.value || "RW";
-  toast("Building world…");
-  const res = await api("/api/start", {
-    method: "POST",
-    body: JSON.stringify({ firstName, lastName, position, age: 17, potential: 85 }),
-  });
-  if (res.error) throw new Error(res.error);
-  document.getElementById("gate")?.classList.add("hidden");
-  document.getElementById("app")?.classList.remove("hidden");
-  await refresh();
-  setView("hub");
-  toast("Career started");
+  const btn = document.getElementById("startCareer");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Building world…";
+  }
+  toast("Building world — wait 10–30s…");
+  try {
+    const res = await api("/api/start", {
+      method: "POST",
+      body: JSON.stringify({ firstName, lastName, position, age: 17, potential: 85 }),
+    });
+    if (res.error) throw new Error(res.error);
+    document.getElementById("gate")?.classList.add("hidden");
+    document.getElementById("app")?.classList.remove("hidden");
+    await refresh();
+    setView("hub");
+    toast("Career started");
+  } catch (e) {
+    const msg = e?.message || String(e);
+    toast("Start failed: " + msg.slice(0, 120));
+    console.error("[start]", e);
+    // Stay on create player form — do not pretend it worked
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Start Career";
+    }
+  }
 }
 
 function boot() {
   bindNav();
   bindActions();
   const startBtn = document.getElementById("startCareer");
-  if (startBtn) startBtn.onclick = () => startCareerFromGate().catch((e) => toast(e.message || e));
+  if (startBtn) startBtn.onclick = () => startCareerFromGate();
   api("/api/status")
     .then((s) => {
       if (s?.careerStarted) {
