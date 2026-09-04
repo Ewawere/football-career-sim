@@ -266,7 +266,6 @@ function onMatchFinished(world: World, payload: any): void {
       resolveThread(crisis, world, "Form crisis eased after strong display.");
     }
 
-    // Breakthrough thread for hot form
     let hot = findActive(world, "breakthrough", userId);
     if (!hot && rating >= 8) {
       openThread(world, {
@@ -336,7 +335,7 @@ function onInjury(world: World, payload: any): void {
 function onNewsGenerated(world: World, payload: any): void {
   if (payload?.type === "manager_sacked") {
     openThread(world, {
-      kind: "club_crisis",
+      kind: "manager_pressure",
       title: `${payload.clubName || "Club"} manager exit`,
       playerId: null,
       clubIds: payload.clubId ? [payload.clubId] : [],
