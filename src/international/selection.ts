@@ -106,3 +106,36 @@ export function isUserCalledUp(world: World, level: NationalTeamLevel = "Senior"
   const squad = selectSquad(world, user.nationality, level);
   return squad.includes(user.id);
 }
+
+/** Status snapshot for hub / API */
+export function playerInternationalStatus(world: World, playerId: EntityId) {
+  const player = world.players.get(playerId);
+  if (!player) {
+    return {
+      nation: null,
+      caps: 0,
+      seniorCallUp: false,
+      u21CallUp: false,
+      seniorRank: null as number | null,
+      u21Rank: null as number | null,
+      nextBreakEligible: false,
+    };
+  }
+
+  const senior = rankCandidates(world, player.nationality, "Senior");
+  const u21 = rankCandidates(world, player.nationality, "U21");
+  const seniorIdx = senior.findIndex((p) => p.id === playerId);
+  const u21Idx = u21.findIndex((p) => p.id === playerId);
+
+  return {
+    nation: player.nationality,
+    caps: (player as any).internationalCaps ?? 0,
+    seniorCallUp: isUserCalledUp(world, "Senior") && world.userPlayerId === playerId
+      ? isUserCalledUp(world, "Senior")
+      : seniorIdx >= 0 && seniorIdx < 23,
+    u21CallUp: u21Idx >= 0 && u21Idx < 23 && player.age <= 21,
+    seniorRank: seniorIdx >= 0 ? seniorIdx + 1 : null,
+    u21Rank: u21Idx >= 0 ? u21Idx + 1 : null,
+    nextBreakEligible: seniorIdx >= 0 && seniorIdx < 30,
+  };
+}
