@@ -12,6 +12,8 @@ function bindNav() {
 }
 
 let lastComparison = null;
+let selectedClubId = null;
+let pendingIdentity = null;
 
 async function loadComparison() {
   try {
@@ -115,33 +117,103 @@ function bindActions() {
   });
 }
 
-async function startCareerFromGate() {
+function showClubStep(clubs) {
+  const list = document.getElementById("clubList");
+  const playerStep = document.getElementById("playerStep");
+  const clubStep = document.getElementById("clubStep");
+  if (!list || !clubStep) return;
+
+  selectedClubId = null;
+  const confirm = document.getElementById("confirmClub");
+  if (confirm) confirm.disabled = true;
+
+  const sorted = [...(clubs || [])].sort((a, b) => b.reputation - a.reputation);
+  list.innerHTML = sorted
+    .map((c) => {
+      const crest =
+        typeof Crests !== "undefined" && Crests.crestImgHtml
+          ? Crests.crestImgHtml(c.name, 36, "crest-img md")
+          : "";
+      return `<button type="button" class="club-opt" data-club-id="${c.id}">
+        ${crest}
+        <div style="flex:1">
+          <div class="name">${c.name}</div>
+          <div class="meta">${c.nation} · ${c.city} · Rep ${c.reputation}</div>
+        </div>
+      </button>`;
+    })
+    .join("");
+
+  list.querySelectorAll(".club-opt").forEach((btn) => {
+    btn.onclick = () => {
+      list.querySelectorAll(".club-opt").forEach((b) => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      selectedClubId = btn.getAttribute("data-club-id");
+      if (confirm) confirm.disabled = !selectedClubId;
+    };
+  });
+
+  playerStep?.classList.add("hide");
+  clubStep.classList.add("show");
+}
+
+async function initWorldAndShowClubs() {
   const firstName = document.getElementById("firstName")?.value || "Jordan";
   const lastName = document.getElementById("lastName")?.value || "Okonkwo";
   const position = document.getElementById("position")?.value || "RW";
+  pendingIdentity = { firstName, lastName, position, age: 17, potential: 85 };
+
   const btn = document.getElementById("startCareer");
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Building world…";
   }
-  toast("Building world — wait 10–30s…");
+  toast("Building world — pick your club next…");
+
+  try {
+    const res = await api("/api/start/init", { method: "POST", body: "{}" });
+    if (res.error) throw new Error(res.error);
+    const clubs = res.clubs || [];
+    if (!clubs.length) throw new Error("No clubs generated");
+    showClubStep(clubs);
+    toast("Choose your starting club");
+  } catch (e) {
+    toast("Start failed: " + String(e.message || e).slice(0, 140));
+    console.error(e);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Continue";
+    }
+  }
+}
+
+async function confirmStartWithClub() {
+  if (!selectedClubId || !pendingIdentity) {
+    toast("Pick a club first");
+    return;
+  }
+  const btn = document.getElementById("confirmClub");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Signing…";
+  }
+  toast("Signing for your club…");
   try {
     const res = await api("/api/start", {
       method: "POST",
-      body: JSON.stringify({ firstName, lastName, position, age: 17, potential: 85 }),
+      body: JSON.stringify({ ...pendingIdentity, clubId: selectedClubId }),
     });
     if (res.error) throw new Error(res.error);
     document.getElementById("gate")?.classList.add("hidden");
     document.getElementById("app")?.classList.remove("hidden");
     await refresh();
     setView("hub");
-    toast("Career started");
+    const clubName = res.club?.name || "your club";
+    toast(`Career started at ${clubName}`);
   } catch (e) {
-    const msg = e?.message || String(e);
-    toast("Start failed: " + msg.slice(0, 120));
-    console.error("[start]", e);
-    // Stay on create player form — do not pretend it worked
-  } finally {
+    toast("Start failed: " + String(e.message || e).slice(0, 140));
+    console.error(e);
     if (btn) {
       btn.disabled = false;
       btn.textContent = "Start Career";
@@ -152,8 +224,21 @@ async function startCareerFromGate() {
 function boot() {
   bindNav();
   bindActions();
+
   const startBtn = document.getElementById("startCareer");
-  if (startBtn) startBtn.onclick = () => startCareerFromGate();
+  if (startBtn) startBtn.onclick = () => initWorldAndShowClubs();
+
+  const confirm = document.getElementById("confirmClub");
+  if (confirm) confirm.onclick = () => confirmStartWithClub();
+
+  const back = document.getElementById("backToPlayer");
+  if (back) {
+    back.onclick = () => {
+      document.getElementById("clubStep")?.classList.remove("show");
+      document.getElementById("playerStep")?.classList.remove("hide");
+    };
+  }
+
   api("/api/status")
     .then((s) => {
       if (s?.careerStarted) {

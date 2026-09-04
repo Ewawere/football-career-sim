@@ -8,12 +8,43 @@
   <link rel="stylesheet" href="/mockup-ui.css" />
   <link rel="stylesheet" href="/crest-ui.css" />
   <link rel="stylesheet" href="/team-cmp.css" />
+  <style>
+    #clubStep { display: none; }
+    #clubStep.show { display: block; }
+    #playerStep.hide { display: none; }
+    .club-list {
+      max-height: 52vh;
+      overflow-y: auto;
+      margin: 12px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .club-opt {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      text-align: left;
+      padding: 12px;
+      margin-bottom: 8px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: #121820;
+      color: #eef4fb;
+      cursor: pointer;
+    }
+    .club-opt.selected {
+      border-color: rgba(45,212,160,0.55);
+      background: rgba(45,212,160,0.1);
+    }
+    .club-opt .meta { font-size: 12px; color: #8797ac; }
+    .club-opt .name { font-weight: 700; font-size: 14px; }
+  </style>
 </head>
 <body>
   <div id="toast"></div>
 
   <div id="gate">
-    <div class="card">
+    <div class="card" id="playerStep">
       <div class="ovr-badge">CAREER MODE</div>
       <h2 style="margin:10px 0 4px;font-size:24px">Create Player</h2>
       <p class="muted">EA FC presentation · FM depth</p>
@@ -27,8 +58,17 @@
             <option>CB</option><option>LB</option><option>RB</option><option>GK</option>
           </select>
         </label>
-        <button id="startCareer" class="btn" style="width:100%;margin-top:8px">Start Career</button>
+        <button id="startCareer" class="btn" style="width:100%;margin-top:8px">Continue</button>
       </div>
+    </div>
+
+    <div class="card" id="clubStep">
+      <div class="ovr-badge">CHOOSE CLUB</div>
+      <h2 style="margin:10px 0 4px;font-size:22px">Where do you start?</h2>
+      <p class="muted">Pick your first club — youth breakthrough story</p>
+      <div id="clubList" class="club-list"></div>
+      <button id="confirmClub" class="btn" style="width:100%" disabled>Start Career</button>
+      <button id="backToPlayer" class="ghost" style="width:100%;margin-top:8px">Back</button>
     </div>
   </div>
 
