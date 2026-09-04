@@ -3,10 +3,27 @@ function bindNav() {
     btn.onclick = () => {
       const v = btn.getAttribute("data-view");
       setView(v);
-      if (v === "match") loadMatchStats();
+      if (v === "match") {
+        loadMatchStats();
+        loadComparison();
+      }
     };
   });
 }
+
+let lastComparison = null;
+
+async function loadComparison() {
+  try {
+    const data = await api("/api/comparison");
+    lastComparison = data.comparison || null;
+    if (hub) hub.teamComparison = lastComparison;
+    if (view === "match") render();
+  } catch (_) {
+    /* optional */
+  }
+}
+window.loadComparison = loadComparison;
 
 function bindActions() {
   document.body.addEventListener("click", async (e) => {
@@ -17,7 +34,10 @@ function bindActions() {
       if (action === "set-view") {
         const v = t.getAttribute("data-view") || "hub";
         setView(v);
-        if (v === "match") loadMatchStats();
+        if (v === "match") {
+          loadMatchStats();
+          loadComparison();
+        }
         return;
       }
       if (action === "advance") {
@@ -25,6 +45,7 @@ function bindActions() {
         await api("/api/advance", { method: "POST", body: "{}" });
         await refresh();
         await loadMatchStats();
+        await loadComparison();
         toast("Matchday done");
       } else if (action === "train") {
         await api("/api/train", {
@@ -70,6 +91,7 @@ function bindActions() {
         await refresh();
         toast(res.ok ? "Job accepted" : "Failed");
       } else if (action === "match-start") {
+        await loadComparison();
         await api("/api/match/start", { method: "POST", body: "{}" });
         toast("Match live");
         setView("match");
@@ -83,6 +105,9 @@ function bindActions() {
       } else if (action === "save") {
         await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
         toast("Saved");
+      } else if (action === "refresh-cmp") {
+        await loadComparison();
+        toast("Preview refreshed");
       }
     } catch (err) {
       console.error(action, err);
