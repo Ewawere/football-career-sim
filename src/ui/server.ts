@@ -1,6 +1,5 @@
 /**
  * Playable career web server - mobile UI + sim API.
- * Lazy session init so process can bind PORT before heavy world gen.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
@@ -108,19 +107,32 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if ((path === "/api/start" || path === "/api/career/start") && method === "POST") {
     const body = await readBody(req);
-    session = api.createSession(Date.now() % 100000);
-    const result = api.startPlayerCareer(session, {
-      firstName: body.firstName || "Alex",
-      lastName: body.lastName || "Player",
-      position: body.position || "CM",
-      nationality: body.nationality || "England",
-      age: body.age ?? 17,
-      potential: body.potential ?? 82,
-      preferredFoot: body.preferredFoot || "Right",
-      physicalProfile: body.physicalProfile || "Athletic",
-    });
-    careerStarted = true;
-    return json(res, 200, { ...result, hub: hybrid.getHybridHub(session) });
+    try {
+      console.log("[start] creating world…");
+      session = api.createSession(Date.now() % 100000);
+      console.log("[start] world ready, placing player…");
+      const result = api.startPlayerCareer(session, {
+        firstName: body.firstName || "Alex",
+        lastName: body.lastName || "Player",
+        position: body.position || "CM",
+        nationality: body.nationality || "England",
+        age: body.age ?? 17,
+        potential: body.potential ?? 82,
+        preferredFoot: body.preferredFoot || "Right",
+        physicalProfile: body.physicalProfile || "Athletic",
+      });
+      careerStarted = true;
+      bootError = null;
+      console.log("[start] career started");
+      return json(res, 200, { ...result, hub: hybrid.getHybridHub(session) });
+    } catch (e: any) {
+      bootError = String(e?.message || e);
+      console.error("[start] FAILED", e);
+      return json(res, 500, {
+        error: bootError,
+        stack: String(e?.stack || "").slice(0, 1200),
+      });
+    }
   }
 
   if (!careerStarted && path !== "/api/start" && path !== "/api/career/start") {
@@ -277,7 +289,7 @@ const server = createServer(async (req, res) => {
       await handleApi(req, res, path);
     } catch (e: any) {
       console.error("[api]", path, e);
-      json(res, 500, { error: String(e?.message ?? e), stack: String(e?.stack || "") });
+      json(res, 500, { error: String(e?.message ?? e), stack: String(e?.stack || "").slice(0, 1200) });
     }
     return;
   }

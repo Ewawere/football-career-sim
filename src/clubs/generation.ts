@@ -1,5 +1,6 @@
 /**
  * Generate fictional league clubs (original names).
+ * Sized for mobile/Railway cold start.
  */
 
 import { nextId } from "../core/id.js";
@@ -22,69 +23,36 @@ export interface LeagueTemplate {
   baseRep: number;
 }
 
-/** Top leagues used to seed the world */
+/** Lean league set so Start Career finishes quickly on Railway */
 export const ALL_LEAGUE_TEMPLATES: LeagueTemplate[] = [
-  { id: "eng-1", name: "English Premier Division", nation: "England", tier: 1, clubCount: 20, baseRep: 78 },
-  { id: "esp-1", name: "Spanish Primera", nation: "Spain", tier: 1, clubCount: 20, baseRep: 76 },
-  { id: "ger-1", name: "German Bundesliga", nation: "Germany", tier: 1, clubCount: 18, baseRep: 75 },
-  { id: "ita-1", name: "Italian Serie A", nation: "Italy", tier: 1, clubCount: 20, baseRep: 74 },
-  { id: "fra-1", name: "French Ligue 1", nation: "France", tier: 1, clubCount: 18, baseRep: 72 },
-  { id: "por-1", name: "Portuguese Liga", nation: "Portugal", tier: 1, clubCount: 18, baseRep: 68 },
-  { id: "ned-1", name: "Dutch Eredivisie", nation: "Netherlands", tier: 1, clubCount: 18, baseRep: 66 },
-  { id: "bel-1", name: "Belgian Pro League", nation: "Belgium", tier: 1, clubCount: 16, baseRep: 62 },
-  { id: "sco-1", name: "Scottish Premiership", nation: "Scotland", tier: 1, clubCount: 12, baseRep: 60 },
-  { id: "tur-1", name: "Turkish Super Lig", nation: "Turkey", tier: 1, clubCount: 18, baseRep: 64 },
+  { id: "eng-1", name: "English Premier Division", nation: "England", tier: 1, clubCount: 16, baseRep: 78 },
+  { id: "esp-1", name: "Spanish Primera", nation: "Spain", tier: 1, clubCount: 14, baseRep: 76 },
+  { id: "ger-1", name: "German Bundesliga", nation: "Germany", tier: 1, clubCount: 14, baseRep: 75 },
+  { id: "ita-1", name: "Italian Serie A", nation: "Italy", tier: 1, clubCount: 14, baseRep: 74 },
+  { id: "fra-1", name: "French Ligue 1", nation: "France", tier: 1, clubCount: 12, baseRep: 72 },
 ];
 
 const NAME_POOLS: Record<string, string[]> = {
   England: [
     "Northbridge", "Royal Crescent", "Harbour", "Ironforge", "Westmere", "Ashford", "Kingswell",
     "Riverdale", "Stonehaven", "Elmwood", "Blackridge", "Southcliff", "Fairview", "Millbrook",
-    "Oakenshield", "Redhaven", "Whitecrest", "Greenfield", "Portside", "Highland", "Eastgate",
-    "Crownhill", "Silvermere", "Dunwick",
+    "Oakenshield", "Redhaven", "Whitecrest", "Greenfield", "Portside", "Highland",
   ],
   Spain: [
-    "Valle Real", "Costa Azul", "Sierra Blanca", "Puerto Dorado", "Atlético Norte", "Unido Sur",
-    "Castilla FC", "Marea Alta", "Ribera", "Monteverde", "Bahía", "Alameda", "Torrevieja",
-    "Cartagena", "Olivo", "Llanos", "Solana", "Río Grande", "Alcázar", "Miraflores",
+    "Valle Real", "Costa Azul", "Sierra Blanca", "Puerto Dorado", "Atletico Norte", "Unido Sur",
+    "Castilla FC", "Marea Alta", "Ribera", "Monteverde", "Bahia", "Alameda", "Torrevieja", "Cartagena",
   ],
   Germany: [
     "Nordstern", "Rheinwacht", "Bergwerk", "Hanse", "Waldstadt", "Stahlwerk", "Elbblick",
-    "Südpark", "Kaiserwald", "Rotfels", "Blauwasser", "Grenzland", "Dornfeld", "Lichtberg",
-    "Osthafen", "Westtor", "Mittelstadt", "Nordpark",
+    "Sudpark", "Kaiserwald", "Rotfels", "Blauwasser", "Grenzland", "Dornfeld", "Lichtberg",
   ],
   Italy: [
     "San Marco", "Viola", "Adriatico", "Toscana", "Lombardia", "Calcio Nord", "Azzurri",
     "Montebianco", "Porto Vecchio", "Reggia", "Etna", "Laguna", "Cittadella", "Fortore",
-    "Aurora", "Stella", "Vesuvio", "Piazza", "Arena", "Castello",
   ],
   France: [
-    "Nordique", "Océan", "Loire", "Rhône", "Bastion", "Lumière", "Garonne", "Alpes",
-    "Côte", "Plaine", "Citadelle", "Vallée", "Port Franc", "Rouge", "Bleu Marine",
-    "Estuaire", "Sommet", "Marais",
-  ],
-  Portugal: [
-    "Atlântico", "Tejo", "Douro", "Lisboa Norte", "Costa Verde", "Serra", "Marítima",
-    "Bragança", "Algarve", "Minho", "Beira", "Porto Sul", "Estrela", "Ribatejo",
-    "Cascais", "Faro", "Coimbra", "Setúbal",
-  ],
-  Netherlands: [
-    "Oranje", "Noordzee", "Polder", "Damstad", "Haven", "Tulpen", "Dijk", "Gracht",
-    "Zuidpark", "Windmolen", "Ijssel", "Maas", "Kanaal", "Strand", "Binnenhof",
-    "Veld", "Kust", "Bos",
-  ],
-  Belgium: [
-    "Bruxelles", "Flandre", "Wallonie", "Schelde", "Ardennes", "Meuse", "Anvers",
-    "Liège", "Gand", "Charleroi", "Ostende", "Namur", "Mons", "Bruges", "Louvain", "Hasselt",
-  ],
-  Scotland: [
-    "Highland", "Clyde", "Forth", "Glenside", "Caledonia", "Moray", "Tayside",
-    "Lothian", "Ayrshire", "Borders", "Hebrides", "Granite",
-  ],
-  Turkey: [
-    "Anadolu", "Boğaz", "Karadeniz", "Ege", "Ankara", "İstanbul", "Antalya",
-    "Trakya", "Akdeniz", "Doğu", "Batı", "Marmara", "Kapadokya", "Sivas",
-    "Bursa", "Izmir", "Konya", "Trabzon",
+    "Nordique", "Ocean", "Loire", "Rhone", "Bastion", "Lumiere", "Garonne", "Alpes",
+    "Cote", "Plaine", "Citadelle", "Vallee", "Port Franc", "Rouge",
   ],
 };
 
@@ -119,7 +87,7 @@ function makeClub(
     leagueId: EntityId;
   }
 ): Club {
-  const rep = Math.max(35, Math.min(95, opts.rep));
+  const rep = Math.max(35, Math.min(95, Math.round(opts.rep)));
   return {
     id: nextId("clb"),
     name: opts.name,
@@ -148,11 +116,11 @@ function makeClub(
 export function generateEnglishTopLeague(rng: RNG, leagueId: EntityId): Club[] {
   const pool = NAME_POOLS.England!;
   const clubs: Club[] = [];
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 16; i++) {
     const city = pool[i % pool.length]!;
     const suf = SUFFIXES[i % SUFFIXES.length]!;
     const name = i % 3 === 0 ? `${city} ${suf}` : `${city} FC`;
-    const rep = 88 - i * 1.8 + rng.int(-2, 2);
+    const rep = 88 - i * 2 + rng.int(-2, 2);
     clubs.push(
       makeClub(rng, {
         name,
@@ -167,9 +135,6 @@ export function generateEnglishTopLeague(rng: RNG, leagueId: EntityId): Club[] {
   return clubs;
 }
 
-/**
- * Full European club set for bootstrap.
- */
 export function generateAllEuropeanClubs(rng: RNG): {
   clubs: Club[];
   leagueClubIds: Map<string, EntityId[]>;
@@ -185,15 +150,9 @@ export function generateAllEuropeanClubs(rng: RNG): {
     for (let i = 0; i < tpl.clubCount; i++) {
       const city = pool[i % pool.length]!;
       const suf = SUFFIXES[(i + tpl.tier) % SUFFIXES.length]!;
-      const name =
-        i === 0 && tpl.baseRep >= 74
-          ? `${city} ${suf}`
-          : `${city} ${i % 2 === 0 ? "FC" : suf}`;
-      // Spread reputation within league
-      const rep =
-        tpl.baseRep +
-        (tpl.clubCount - 1 - i) * (12 / Math.max(1, tpl.clubCount - 1)) +
-        rng.int(-2, 2);
+      const name = `${city} ${i % 2 === 0 ? "FC" : suf}`;
+      const spread = (tpl.clubCount - 1 - i) * (12 / Math.max(1, tpl.clubCount - 1));
+      const rep = tpl.baseRep + spread + rng.int(-2, 2);
       const club = makeClub(rng, {
         name,
         short: city.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "FC",
@@ -206,7 +165,7 @@ export function generateAllEuropeanClubs(rng: RNG): {
       ids.push(club.id);
     }
 
-    leagueClubIds.set(tpl.nation + ":" + tpl.id, ids);
+    leagueClubIds.set(`${tpl.nation}:${tpl.id}`, ids);
   }
 
   return { clubs, leagueClubIds };
