@@ -1,0 +1,42 @@
+.cmp-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: start;
+  margin-top: 12px;
+}
+.cmp-vs {
+  font-weight: 800;
+  color: var(--muted);
+  padding-top: 28px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.team-col {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+}
+.form-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  margin-right: 3px;
+}
+.form-pill.w { background: rgba(45,212,160,0.2); color: var(--teal); }
+.form-pill.d { background: rgba(148,163,184,0.2); color: #cbd5e1; }
+.form-pill.l { background: rgba(248,113,113,0.2); color: #f87171; }
+ul.chatter {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+ul.chatter li { margin-bottom: 4px; }

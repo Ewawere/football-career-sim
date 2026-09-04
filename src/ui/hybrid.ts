@@ -7,6 +7,7 @@ import { getHub } from "./api.js";
 import { snapshotObjectives, claimObjective } from "../career/objectives.js";
 import { snapshotInbox, markInboxRead, syncInboxFromState } from "../career/inbox.js";
 import { getPreMatchBriefing, getPostMatchPack } from "../career/briefing.js";
+import { getTeamComparison } from "../career/team-comparison.js";
 import { getMatchdaySquadView } from "../career/matchday-squad.js";
 import { getMedicalCentre } from "../career/medical.js";
 import { openNegotiation, respondNegotiation, snapshotNegotiation } from "../career/negotiation.js";
@@ -37,6 +38,7 @@ export function getHybridHub(session: GameSession) {
 
   const briefing = safe(() => getPreMatchBriefing(w), null);
   const postMatch = safe(() => getPostMatchPack(w), null);
+  const teamComparison = safe(() => getTeamComparison(w), null);
 
   const player = base.player
     ? {
@@ -55,12 +57,17 @@ export function getHybridHub(session: GameSession) {
     briefing,
     preMatch: briefing,
     postMatch,
+    teamComparison,
     matchdaySquad: safe(() => getMatchdaySquadView(w), null),
     medical: safe(() => getMedicalCentre(w), null),
     negotiation: safe(() => snapshotNegotiation(w), null),
     roles: safe(() => snapshotRoles(w), null),
     jobOffers: safe(() => snapshotJobOffers(w), []),
   };
+}
+
+export function getTeamComparisonApi(session: GameSession) {
+  return { comparison: getTeamComparison(session.world) };
 }
 
 export function claimObjectiveApi(session: GameSession, objectiveId: string) {
