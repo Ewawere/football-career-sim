@@ -3,26 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070b10" />
   <title>Career Mode</title>
   <link rel="stylesheet" href="/mockup-ui.css" />
-  <link rel="stylesheet" href="/mobile-shell.css" />
 </head>
 <body>
   <div id="toast"></div>
 
   <div id="gate">
-    <div class="card" style="max-width:520px;margin:48px auto">
-      <div class="row-between">
-        <div>
-          <div class="pill">CAREER MODE</div>
-          <h1 style="margin-top:10px">Create Player</h1>
-          <p class="muted">EA FC presentation · FM depth</p>
-        </div>
-        <div class="face-ring">FC</div>
-      </div>
-      <div style="margin-top:18px">
-        <label>First name<input id="firstName" value="Alex" /></label>
-        <label>Last name<input id="lastName" value="Vale" /></label>
+    <div class="card">
+      <div class="ovr-badge">CAREER MODE</div>
+      <h2 style="margin:10px 0 4px;font-size:24px">Create Player</h2>
+      <p class="muted">EA FC presentation · FM depth</p>
+      <div style="margin-top:16px">
+        <label>First name<input id="firstName" value="Jordan" /></label>
+        <label>Last name<input id="lastName" value="Okonkwo" /></label>
         <label>Position
           <select id="position">
             <option>ST</option><option selected>RW</option><option>LW</option>
@@ -30,28 +25,22 @@
             <option>CB</option><option>LB</option><option>RB</option><option>GK</option>
           </select>
         </label>
-        <div class="actions">
-          <button id="startCareer" class="btn">Start Career</button>
-        </div>
+        <button id="startCareer" class="btn" style="width:100%;margin-top:8px">Start Career</button>
       </div>
     </div>
   </div>
 
-  <div id="app" class="hidden shell">
-    <nav id="sideNav" class="card">
-      <div class="pill" style="margin-bottom:10px">CAREER</div>
-      <button data-view="hub" class="active">Hub</button>
-      <button data-view="news">News</button>
-      <button data-view="hub">Squad</button>
-      <button data-view="hub">Inbox</button>
-    </nav>
-    <main>
+  <div id="app" class="hidden">
+    <div id="appShell">
       <div id="content"></div>
-      <nav id="bottomNav" class="card">
-        <button data-view="hub" class="active">Hub</button>
-        <button data-view="news">News</button>
-      </nav>
-    </main>
+    </div>
+    <nav class="bottom-nav" id="bottomNav">
+      <button data-view="hub" class="active"><span class="nav-ico">⌂</span>Hub</button>
+      <button data-view="match"><span class="nav-ico">⚽</span>Match</button>
+      <button data-view="social"><span class="nav-ico">◈</span>Social</button>
+      <button data-view="career"><span class="nav-ico">💼</span>Career</button>
+      <button data-view="more"><span class="nav-ico">···</span>More</button>
+    </nav>
   </div>
 
   <script src="/app-core.js"></script>
