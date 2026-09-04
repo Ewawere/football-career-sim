@@ -9,16 +9,16 @@
   <link rel="stylesheet" href="/crest-ui.css" />
   <link rel="stylesheet" href="/team-cmp.css" />
   <style>
-    #clubStep { display: none; }
-    #clubStep.show { display: block; }
+    #styleStep, #clubStep { display: none; }
+    #styleStep.show, #clubStep.show { display: block; }
     #playerStep.hide { display: none; }
-    .club-list {
-      max-height: 52vh;
+    .club-list, .style-list {
+      max-height: 48vh;
       overflow-y: auto;
       margin: 12px 0;
       -webkit-overflow-scrolling: touch;
     }
-    .club-opt {
+    .club-opt, .style-opt {
       display: flex;
       align-items: center;
       gap: 10px;
@@ -32,12 +32,12 @@
       color: #eef4fb;
       cursor: pointer;
     }
-    .club-opt.selected {
+    .club-opt.selected, .style-opt.selected {
       border-color: rgba(45,212,160,0.55);
       background: rgba(45,212,160,0.1);
     }
-    .club-opt .meta { font-size: 12px; color: #8797ac; }
-    .club-opt .name { font-weight: 700; font-size: 14px; }
+    .club-opt .meta, .style-opt .meta { font-size: 12px; color: #8797ac; line-height: 1.35; }
+    .club-opt .name, .style-opt .name { font-weight: 700; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -47,28 +47,73 @@
     <div class="card" id="playerStep">
       <div class="ovr-badge">CAREER MODE</div>
       <h2 style="margin:10px 0 4px;font-size:24px">Create Player</h2>
-      <p class="muted">EA FC presentation · FM depth</p>
+      <p class="muted">Identity · foot · position · body</p>
       <div style="margin-top:16px">
         <label>First name<input id="firstName" value="Jordan" /></label>
         <label>Last name<input id="lastName" value="Okonkwo" /></label>
-        <label>Position
-          <select id="position">
-            <option>ST</option><option selected>RW</option><option>LW</option>
-            <option>CAM</option><option>CM</option><option>CDM</option>
-            <option>CB</option><option>LB</option><option>RB</option><option>GK</option>
+        <label>Preferred foot
+          <select id="preferredFoot">
+            <option value="Right" selected>Right</option>
+            <option value="Left">Left</option>
+            <option value="Both">Both</option>
           </select>
         </label>
-        <button id="startCareer" class="btn" style="width:100%;margin-top:8px">Continue</button>
+        <label>Main position
+          <select id="position">
+            <optgroup label="Attack">
+              <option value="ST">ST — Striker</option>
+              <option value="CF">CF — Centre Forward</option>
+              <option value="RW" selected>RW — Right Wing</option>
+              <option value="LW">LW — Left Wing</option>
+            </optgroup>
+            <optgroup label="Midfield">
+              <option value="CAM">CAM — Attacking Mid</option>
+              <option value="CM">CM — Central Mid</option>
+              <option value="CDM">CDM — Defensive Mid</option>
+              <option value="RM">RM — Right Mid</option>
+              <option value="LM">LM — Left Mid</option>
+            </optgroup>
+            <optgroup label="Defence">
+              <option value="CB">CB — Centre Back</option>
+              <option value="LB">LB — Left Back</option>
+              <option value="RB">RB — Right Back</option>
+              <option value="LWB">LWB — Left Wing-Back</option>
+              <option value="RWB">RWB — Right Wing-Back</option>
+            </optgroup>
+            <optgroup label="Goalkeeper">
+              <option value="GK">GK — Goalkeeper</option>
+            </optgroup>
+          </select>
+        </label>
+        <label>Body type
+          <select id="physicalProfile">
+            <option value="Athletic" selected>Athletic</option>
+            <option value="Slight">Slight / agile</option>
+            <option value="Average">Average</option>
+            <option value="Powerful">Powerful</option>
+            <option value="Tall">Tall</option>
+          </select>
+        </label>
+        <button id="toStyleStep" class="btn" style="width:100%;margin-top:8px">How do you play? →</button>
       </div>
+    </div>
+
+    <div class="card" id="styleStep">
+      <div class="ovr-badge">PLAY STYLE</div>
+      <h2 style="margin:10px 0 4px;font-size:22px">How you play</h2>
+      <p class="muted" id="styleHint">Shapes your starting attributes</p>
+      <div id="styleList" class="style-list"></div>
+      <button id="toClubStep" class="btn" style="width:100%" disabled>Choose club →</button>
+      <button id="backToPlayer" class="ghost" style="width:100%;margin-top:8px">Back</button>
     </div>
 
     <div class="card" id="clubStep">
       <div class="ovr-badge">CHOOSE CLUB</div>
       <h2 style="margin:10px 0 4px;font-size:22px">Where do you start?</h2>
-      <p class="muted">Pick your first club — youth breakthrough story</p>
+      <p class="muted">Your first professional club</p>
       <div id="clubList" class="club-list"></div>
       <button id="confirmClub" class="btn" style="width:100%" disabled>Start Career</button>
-      <button id="backToPlayer" class="ghost" style="width:100%;margin-top:8px">Back</button>
+      <button id="backToStyle" class="ghost" style="width:100%;margin-top:8px">Back</button>
     </div>
   </div>
 
