@@ -1,5 +1,6 @@
 /**
  * Cross-league scouting interest → contract offers for the user player.
+ * Clubs from every major league can scout and offer a move.
  */
 
 import { nextId } from "../core/id.js";
@@ -26,6 +27,27 @@ function bag(world: World): PlayerTransferOffer[] {
   return (world as any).playerTransferOffers as PlayerTransferOffer[];
 }
 
+function leagueLabelFor(nation: string): string {
+  switch (nation) {
+    case "England":
+      return "Premier League";
+    case "Spain":
+      return "La Liga";
+    case "Germany":
+      return "Bundesliga";
+    case "Italy":
+      return "Serie A";
+    case "France":
+      return "Ligue 1";
+    case "Portugal":
+      return "Primeira Liga";
+    case "Netherlands":
+      return "Eredivisie";
+    default:
+      return nation || "Europe";
+  }
+}
+
 export function snapshotTransferOffers(world: World) {
   return bag(world)
     .filter((o) => o.status === "pending")
@@ -36,7 +58,7 @@ export function snapshotTransferOffers(world: World) {
     }));
 }
 
-/** Call after strong performances / advance day */
+/** Call after strong performances / advance day / match finish */
 export function generateScoutInterest(world: World, force = false): PlayerTransferOffer[] {
   const pid = world.userPlayerId;
   if (!pid) return [];
@@ -44,22 +66,28 @@ export function generateScoutInterest(world: World, force = false): PlayerTransf
   if (!player?.currentClubId) return [];
 
   const existing = bag(world).filter((o) => o.status === "pending");
-  if (existing.length >= 4 && !force) return existing;
+  if (existing.length >= 5 && !force) return existing;
 
   const form = player.state.form ?? 50;
   const apps = player.careerAppearances ?? 0;
   const goals = player.careerGoals ?? 0;
+  const assists = (player as any).careerAssists ?? 0;
   const trust = player.state.managerTrust ?? 50;
   const ovr = player.ovr ?? 60;
 
-  // Chance to be scouted
-  let chance = 0.08;
-  if (form >= 70) chance += 0.1;
+  let chance = 0.18;
+  if (form >= 65) chance += 0.12;
+  if (form >= 80) chance += 0.1;
+  if (goals >= 1) chance += 0.08;
   if (goals >= 3) chance += 0.12;
-  if (apps >= 5) chance += 0.08;
-  if ((player.state as any).openToTransfer) chance += 0.2;
-  if (trust < 40) chance += 0.1;
+  if (assists >= 2) chance += 0.06;
+  if (apps >= 3) chance += 0.1;
+  if (apps >= 8) chance += 0.08;
+  if ((player.state as any).openToTransfer) chance += 0.25;
+  if (trust < 40) chance += 0.12;
+  if (ovr >= 70) chance += 0.08;
   if (force) chance = 1;
+  chance = Math.min(chance, 0.92);
 
   if (!world.rng.chance(chance) && !force) return existing;
 
@@ -67,53 +95,76 @@ export function generateScoutInterest(world: World, force = false): PlayerTransf
   const value = estimateMarketValue(world, player);
   const currentWage = player.contract?.wage ?? Math.round(ovr * ovr * 6);
 
-  const candidates = [...world.clubs.values()]
-    .filter((c) => c.id !== player.currentClubId)
-    .filter((c) => Math.abs(c.reputation - myClub.reputation) <= 18 || c.reputation > myClub.reputation - 5)
-    .sort((a, b) => b.reputation - a.reputation);
+  const allOthers = [...world.clubs.values()].filter((c) => c.id !== player.currentClubId);
+  const band = allOthers.filter(
+    (c) =>
+      Math.abs(c.reputation - myClub.reputation) <= 25 ||
+      c.reputation >= myClub.reputation - 8
+  );
+  const pool = band.length ? band : allOthers;
 
-  if (!candidates.length) return existing;
+  const byNation = new Map<string, typeof pool>();
+  for (const c of pool) {
+    const list = byNation.get(c.nation) || [];
+    list.push(c);
+    byNation.set(c.nation, list);
+  }
+  const nations = world.rng.shuffle([...byNation.keys()]);
 
-  const n = force ? Math.min(3, candidates.length) : world.rng.int(1, Math.min(2, candidates.length));
-  const picks = world.rng.shuffle([...candidates]).slice(0, n);
-  const created: PlayerTransferOffer[] = [];
+  const picks: typeof pool = [];
+  const targetN = force ? Math.min(4, pool.length) : world.rng.int(1, Math.min(3, pool.length));
+
+  for (const nation of nations) {
+    if (picks.length >= targetN) break;
+    const list = byNation.get(nation)!;
+    const sorted = [...list].sort((a, b) => b.reputation - a.reputation);
+    const choice = world.rng.pick(sorted.slice(0, Math.min(6, sorted.length)));
+    if (!existing.some((o) => o.fromClubId === choice.id) && !picks.some((p) => p.id === choice.id)) {
+      picks.push(choice);
+    }
+  }
+  if (picks.length < targetN) {
+    const rest = world.rng
+      .shuffle([...pool])
+      .filter((c) => !picks.some((p) => p.id === c.id) && !existing.some((o) => o.fromClubId === c.id));
+    for (const c of rest) {
+      if (picks.length >= targetN) break;
+      picks.push(c);
+    }
+  }
+
+  if (!picks.length) return existing;
 
   for (const club of picks) {
     if (existing.some((o) => o.fromClubId === club.id)) continue;
-    const wageBump = 1.05 + (club.reputation - myClub.reputation) * 0.004 + world.rng.float(0, 0.12);
-    const wage = Math.round(Math.max(currentWage * wageBump, currentWage + 2000));
-    const years = player.age <= 22 ? 4 : 3;
-    const fee = Math.round(value * (0.9 + world.rng.float(0, 0.5)));
+    const repDelta = club.reputation - myClub.reputation;
+    const wageBump = 1.04 + repDelta * 0.005 + world.rng.float(0, 0.1);
+    const wage = Math.round(
+      Math.max(currentWage * Math.max(0.95, wageBump), currentWage + (repDelta > 0 ? 1500 : 500))
+    );
+    const years = player.age <= 22 ? 4 : player.age <= 28 ? 3 : 2;
+    const fee = Math.round(value * (0.85 + world.rng.float(0, 0.55)));
     const offer: PlayerTransferOffer = {
       id: nextId("pto"),
       fromClubId: club.id,
       fromClubName: club.name,
       fromNation: club.nation,
-      leagueLabel: club.nation === "England"
-        ? "Premier League"
-        : club.nation === "Spain"
-          ? "La Liga"
-          : club.nation === "Germany"
-            ? "Bundesliga"
-            : club.nation === "Italy"
-              ? "Serie A"
-              : club.nation === "France"
-                ? "Ligue 1"
-                : club.nation,
+      leagueLabel: leagueLabelFor(club.nation),
       wageWeekly: wage,
       years,
       transferFee: fee,
       roleNote:
-        club.reputation > myClub.reputation + 5
-          ? "Bigger stage — rotation risk early on."
-          : club.reputation < myClub.reputation - 5
-            ? "Likely starter and focal point."
-            : "Similar level — fight for your place.",
+        club.reputation > myClub.reputation + 6
+          ? "Bigger stage — may rotate early on."
+          : club.reputation < myClub.reputation - 6
+            ? "Likely starter and main man."
+            : club.nation !== myClub.nation
+              ? "Cross-league move — new league, new challenge."
+              : "Similar level — fight for your place.",
       status: "pending",
       createdDate: world.calendar.currentDate,
     };
     bag(world).push(offer);
-    created.push(offer);
   }
 
   return snapshotTransferOffers(world);
@@ -122,7 +173,8 @@ export function generateScoutInterest(world: World, force = false): PlayerTransf
 export function acceptTransferOffer(world: World, offerId: string): { ok: boolean; message: string } {
   const offers = bag(world);
   const offer = offers.find((o) => o.id === offerId && o.status === "pending");
-  if (!offer) return { ok: false, message: "Offer gone" };
+  if (!offer) return { ok: false, message: "Offer not found" };
+
   const pid = world.userPlayerId;
   if (!pid) return { ok: false, message: "No player" };
   const player = world.players.get(pid)!;
@@ -130,7 +182,6 @@ export function acceptTransferOffer(world: World, offerId: string): { ok: boolea
   const toClub = world.clubs.get(offer.fromClubId);
   if (!toClub) return { ok: false, message: "Club missing" };
 
-  // Leave old squad
   if (fromClub) {
     fromClub.squadPlayerIds = fromClub.squadPlayerIds.filter((id) => id !== pid);
     if (player.contract?.wage) {
@@ -141,7 +192,6 @@ export function acceptTransferOffer(world: World, offerId: string): { ok: boolea
     }
   }
 
-  // Join new
   player.currentClubId = toClub.id;
   if (!toClub.squadPlayerIds.includes(pid)) toClub.squadPlayerIds.push(pid);
   const endYear = parseInt(world.calendar.currentDate.slice(0, 4), 10) + offer.years;
@@ -164,7 +214,6 @@ export function acceptTransferOffer(world: World, offerId: string): { ok: boolea
     if (o.status === "pending") o.status = "expired";
   }
 
-  // News-ish note on world
   if (!(world as any).newsFeed) (world as any).newsFeed = [];
   (world as any).newsFeed.push({
     id: nextId("nws"),
@@ -182,6 +231,13 @@ export function acceptTransferOffer(world: World, offerId: string): { ok: boolea
     tags: ["transfer", "player-move"],
     storyKey: `pto:${offer.id}`,
   });
+
+  if ((world as any).contractNegotiation) {
+    const neg = (world as any).contractNegotiation;
+    neg.open = false;
+    neg.status = "idle";
+    neg.lastMessage = `Moved to ${toClub.name}.`;
+  }
 
   return { ok: true, message: `Signed for ${toClub.name}` };
 }
