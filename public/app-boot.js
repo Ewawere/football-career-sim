@@ -112,7 +112,7 @@ function bindActions() {
         await refresh();
         await loadMatchStats();
         await loadComparison();
-        toast("Matchday done");
+        toast("Day advanced");
       } else if (action === "train") {
         await api("/api/train", {
           method: "POST",
@@ -155,17 +155,24 @@ function bindActions() {
         });
         await refresh();
         toast(res.ok ? "Job accepted" : "Failed");
-      } else if (action === "match-start") {
-        await loadComparison();
-        await api("/api/match/start", { method: "POST", body: "{}" });
-        setView("match");
-        await refresh();
-      } else if (action === "match-finish") {
-        await api("/api/match/finish", { method: "POST", body: "{}" });
+      } else if (action === "match-start" || action === "match-finish") {
+        // Player career: one tap = play the next fixture to full time
+        toast("Playing match…");
+        try {
+          await api("/api/match/start", { method: "POST", body: "{}" });
+        } catch (e) {
+          // start may fail if already live — still try finish
+          console.warn("match/start", e);
+        }
+        const res = await api("/api/match/finish", { method: "POST", body: "{}" });
+        if (res.error) throw new Error(res.error);
         await refresh();
         await loadMatchStats();
         setView("match");
-        toast("Full time");
+        const score = res.state?.score || res.report?.score || lastMatch?.homeScore != null
+          ? `${lastMatch?.homeScore ?? "?"}-${lastMatch?.awayScore ?? "?"}`
+          : null;
+        toast(score ? `Full time ${res.state?.score || score}` : "Full time");
       } else if (action === "save") {
         await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
         toast("Saved");
@@ -173,6 +180,7 @@ function bindActions() {
         await loadComparison();
       }
     } catch (err) {
+      console.error(action, err);
       toast(err.message || String(err));
     }
   });
