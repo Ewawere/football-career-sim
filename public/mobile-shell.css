@@ -1,5 +1,4 @@
 /* Mobile-first overrides */
-
 /* ========== MOBILE-FIRST OVERRIDE (v3) ========== */
 html, body, #app {
   max-width: 100% !important;
@@ -93,3 +92,26 @@ aside { display: none !important; }
   .choice-card .c-title { font-size: 15px !important; }
   .choice-card .c-meta { font-size: 13px !important; }
 }
+
+.choice-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 560px) { .choice-grid { grid-template-columns: 1fr 1fr; } }
+.choice-card {
+  text-align: left; padding: 14px 16px; border-radius: 12px; cursor: pointer;
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  min-height: 64px;
+}
+.choice-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(45,212,160,0.35);
+}
+.choice-card .c-title { font-weight: 800; font-size: 15px; margin-bottom: 4px; }
+.choice-card .c-meta { font-size: 13px; color: var(--muted); line-height: 1.4; }
+.choice-card .c-tag {
+  display: inline-block; margin-top: 8px; font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 6px; background: var(--accent-dim); color: var(--accent);
+}
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 520px) { .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
+.gate-title { font-size: clamp(22px, 6vw, 28px); font-weight: 900; letter-spacing: -0.03em; }
+.onboard-step .btn, .onboard-step .ghost { min-height: 48px; font-size: 15px; }
