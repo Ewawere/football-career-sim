@@ -1,400 +1,386 @@
 /**
- * Player Career Mode: create and place a user player realistically.
+ * Player Career Mode: create a user-controlled player and place them
+ * into a realistically appropriate club/pathway.
  */
 
+import { RNG } from "../core/rng.js";
 import { nextId } from "../core/id.js";
+import type {
+  EntityId,
+  Position,
+  PreferredFoot,
+  PhysicalProfile,
+  GameDate,
+} from "../core/types.js";
 import type { World } from "../world/world.js";
-import type { Position, PreferredFoot, PhysicalProfile, EntityId } from "../core/types.js";
-import { createEmptyState, type Player } from "../players/player.js";
-import { calculateOVR, createBaseAttributes } from "../players/attributes.js";
-import { enforceAgeOvrCap } from "../transfers/squad-rules.js";
-import { generatePersonality } from "../personality/generation.js";
+import { addPlayer } from "../world/world.js";
+import type { Player, PlayerContract } from "../players/player.js";
+import { assignStartingPlayStyles } from "../players/playstyles.js";
+import { createEmptyState, recomputeOVR } from "../players/player.js";
+import type { PlayerAttributes } from "../players/attributes.js";
+import { calculateOVR } from "../players/attributes.js";
 import type { Club } from "../clubs/club.js";
+import { createPersonalityFromOptions } from "../personality/generation.js";
+import { assignAgent } from "../relationships/agent.js";
 
-/** How the player likes to play in their position — shapes attributes */
-export type PlayArchetype =
-  | "poacher"
-  | "target"
-  | "complete_forward"
-  | "winger"
-  | "inside_forward"
-  | "playmaker"
-  | "box_to_box"
-  | "destroyer"
-  | "deep_lying"
-  | "ball_playing_cb"
-  | "stopper"
-  | "fullback"
-  | "wingback"
-  | "sweeper_keeper"
-  | "shot_stopper"
-  | "balanced";
-
-export interface CareerCreateOptions {
+export interface PlayerCreationOptions {
   firstName: string;
   lastName: string;
   position: Position;
-  preferredFoot?: PreferredFoot;
-  nationality?: string;
-  age?: number;
-  physicalProfile?: PhysicalProfile;
-  potential?: number;
+  preferredFoot: PreferredFoot;
+  nationality: string;
+  age: number;
+  physicalProfile: PhysicalProfile;
   startingAbility?: number;
-  clubId?: EntityId | string;
-  /** Secondary positions the player can cover */
-  secondaryPositions?: Position[];
-  /** Playing style in the main role */
-  playArchetype?: PlayArchetype;
+  potential?: number;
   heightCm?: number;
+  preferredClubId?: string;
+  playArchetype?: string;
 }
 
-export interface CareerPlacement {
+export type CareerPathway =
+  | "EliteAcademy"
+  | "MidAcademy"
+  | "LowerLeague"
+  | "YouthOnly";
+
+export interface PlacementResult {
   player: Player;
   club: Club | null;
+  pathway: CareerPathway;
+  role: SelectionRole;
   reason: string;
 }
 
-export function listStarterClubs(world: World): Array<{
-  id: string;
-  name: string;
-  nation: string;
-  reputation: number;
-  city: string;
-}> {
-  return [...world.clubs.values()]
-    .sort((a, b) => b.reputation - a.reputation)
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      nation: c.nation,
-      reputation: c.reputation,
-      city: c.city,
-    }));
+export type SelectionRole =
+  | "Academy"
+  | "Reserve"
+  | "Bench"
+  | "Rotation"
+  | "Starter"
+  | "KeyPlayer"
+  | "Injured"
+  | "Suspended";
+
+function clamp(n: number, lo = 1, hi = 99): number {
+  return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
-function heightForProfile(profile: PhysicalProfile, explicit?: number): number {
-  if (explicit && explicit >= 160 && explicit <= 210) return explicit;
-  switch (profile) {
-    case "Slight":
-      return 172;
-    case "Tall":
-      return 192;
-    case "Powerful":
-      return 186;
-    case "Athletic":
-      return 180;
-    default:
-      return 178;
-  }
-}
+function generateAttributesFromAbility(
+  rng: RNG,
+  pos: Position,
+  ca: number
+): PlayerAttributes {
+  const noise = () => rng.normal(0, 5);
+  const tech = {
+    finishing: clamp(ca + noise()),
+    passing: clamp(ca + noise()),
+    crossing: clamp(ca + noise()),
+    dribbling: clamp(ca + noise()),
+    ballControl: clamp(ca + noise()),
+    longShots: clamp(ca + noise()),
+    heading: clamp(ca + noise()),
+    setPieces: clamp(ca + noise() - 5),
+    tackling: clamp(ca + noise()),
+    marking: clamp(ca + noise()),
+  };
+  const phys = {
+    pace: clamp(ca + noise()),
+    acceleration: clamp(ca + noise()),
+    strength: clamp(ca + noise()),
+    stamina: clamp(ca + noise()),
+    agility: clamp(ca + noise()),
+    jumping: clamp(ca + noise()),
+    balance: clamp(ca + noise()),
+  };
+  const ment = {
+    vision: clamp(ca + noise()),
+    composure: clamp(ca + noise()),
+    decisions: clamp(ca + noise()),
+    positioning: clamp(ca + noise()),
+    reactions: clamp(ca + noise()),
+    workRate: clamp(ca + noise()),
+    anticipation: clamp(ca + noise()),
+    aggression: clamp(ca + noise()),
+    leadership: clamp(ca + noise() - 10),
+  };
 
-function applyPositionBias(attrs: ReturnType<typeof createBaseAttributes>, pos: Position) {
-  const t = attrs.technical;
-  const p = attrs.physical;
-  const m = attrs.mental;
-  if (["ST", "CF"].includes(pos)) {
-    t.finishing = Math.min(99, t.finishing + 8);
-    t.heading = Math.min(99, t.heading + 4);
-    p.pace = Math.min(99, p.pace + 3);
-  } else if (["RW", "LW", "RM", "LM"].includes(pos)) {
-    p.pace = Math.min(99, p.pace + 8);
-    t.dribbling = Math.min(99, t.dribbling + 6);
-    t.crossing = Math.min(99, t.crossing + 5);
-  } else if (["CAM", "AM"].includes(pos)) {
-    t.passing = Math.min(99, t.passing + 7);
-    t.dribbling = Math.min(99, t.dribbling + 5);
-    m.vision = Math.min(99, (m as any).vision ?? 50 + 6);
-  } else if (["CM", "CDM"].includes(pos)) {
-    t.passing = Math.min(99, t.passing + 5);
-    t.tackling = Math.min(99, t.tackling + (pos === "CDM" ? 7 : 3));
-    m.positioning = Math.min(99, (m as any).positioning ?? 50 + 4);
-  } else if (["CB"].includes(pos)) {
-    t.tackling = Math.min(99, t.tackling + 8);
-    t.heading = Math.min(99, t.heading + 6);
-    p.strength = Math.min(99, p.strength + 5);
-  } else if (["LB", "RB", "LWB", "RWB"].includes(pos)) {
-    p.stamina = Math.min(99, p.stamina + 6);
-    t.crossing = Math.min(99, t.crossing + 5);
-    t.tackling = Math.min(99, t.tackling + 4);
+  const boost = (o: Record<string, number>, k: string, a: number) => {
+    if (k in o) o[k] = clamp(o[k]! + a);
+  };
+  if (pos === "ST" || pos === "CF") {
+    boost(tech, "finishing", 8);
+    boost(ment, "composure", 5);
+  } else if (pos === "CAM") {
+    boost(tech, "passing", 6);
+    boost(ment, "vision", 8);
+  } else if (["LW", "RW"].includes(pos)) {
+    boost(phys, "pace", 8);
+    boost(tech, "dribbling", 6);
+  } else if (pos === "CB") {
+    boost(tech, "marking", 8);
+    boost(tech, "tackling", 6);
+    boost(phys, "strength", 5);
   } else if (pos === "GK") {
-    // GK attrs live in technical/mental depending on schema — boost generically
-    t.handling = Math.min(99, ((t as any).handling ?? 50) + 10);
-    t.reflexes = Math.min(99, ((t as any).reflexes ?? 50) + 8);
-  }
-}
-
-function applyArchetype(
-  attrs: ReturnType<typeof createBaseAttributes>,
-  arch: PlayArchetype
-) {
-  const t = attrs.technical as any;
-  const p = attrs.physical as any;
-  const m = attrs.mental as any;
-  const bump = (obj: any, key: string, n: number) => {
-    if (obj[key] == null) obj[key] = 50;
-    obj[key] = Math.min(99, obj[key] + n);
-  };
-
-  switch (arch) {
-    case "poacher":
-      bump(t, "finishing", 10);
-      bump(t, "positioning", 6);
-      bump(p, "pace", 4);
-      break;
-    case "target":
-      bump(t, "heading", 10);
-      bump(p, "strength", 8);
-      bump(t, "finishing", 4);
-      break;
-    case "complete_forward":
-      bump(t, "finishing", 6);
-      bump(t, "passing", 4);
-      bump(t, "dribbling", 4);
-      bump(p, "pace", 3);
-      break;
-    case "winger":
-      bump(p, "pace", 10);
-      bump(t, "crossing", 8);
-      bump(t, "dribbling", 6);
-      break;
-    case "inside_forward":
-      bump(t, "finishing", 7);
-      bump(t, "dribbling", 7);
-      bump(p, "pace", 5);
-      break;
-    case "playmaker":
-      bump(t, "passing", 10);
-      bump(m, "vision", 8);
-      bump(t, "dribbling", 4);
-      break;
-    case "box_to_box":
-      bump(p, "stamina", 10);
-      bump(t, "passing", 4);
-      bump(t, "tackling", 4);
-      bump(p, "pace", 3);
-      break;
-    case "destroyer":
-      bump(t, "tackling", 10);
-      bump(p, "strength", 6);
-      bump(m, "aggression", 6);
-      break;
-    case "deep_lying":
-      bump(t, "passing", 9);
-      bump(m, "vision", 7);
-      bump(t, "tackling", 3);
-      break;
-    case "ball_playing_cb":
-      bump(t, "passing", 8);
-      bump(t, "tackling", 5);
-      bump(m, "composure", 5);
-      break;
-    case "stopper":
-      bump(t, "tackling", 9);
-      bump(t, "heading", 7);
-      bump(p, "strength", 6);
-      break;
-    case "fullback":
-      bump(t, "tackling", 6);
-      bump(t, "crossing", 5);
-      bump(p, "stamina", 5);
-      break;
-    case "wingback":
-      bump(p, "stamina", 9);
-      bump(t, "crossing", 7);
-      bump(p, "pace", 5);
-      break;
-    case "sweeper_keeper":
-      bump(t, "kicking", 8);
-      bump(t, "handling", 5);
-      bump(m, "vision", 4);
-      break;
-    case "shot_stopper":
-      bump(t, "reflexes", 10);
-      bump(t, "handling", 8);
-      break;
-    default:
-      bump(t, "passing", 2);
-      bump(p, "stamina", 2);
-  }
-}
-
-function defaultSecondaries(pos: Position): Position[] {
-  const map: Partial<Record<Position, Position[]>> = {
-    ST: ["CF", "RW"],
-    CF: ["ST", "CAM"],
-    RW: ["RM", "ST"],
-    LW: ["LM", "ST"],
-    RM: ["RW", "CM"],
-    LM: ["LW", "CM"],
-    CAM: ["CM", "RW"],
-    CM: ["CDM", "CAM"],
-    CDM: ["CM", "CB"],
-    CB: ["CDM"],
-    LB: ["LWB", "LM"],
-    RB: ["RWB", "RM"],
-    LWB: ["LB", "LM"],
-    RWB: ["RB", "RM"],
-    GK: [],
-  };
-  return (map[pos] || []).slice(0, 2);
-}
-
-function defaultArchetype(pos: Position): PlayArchetype {
-  if (pos === "ST" || pos === "CF") return "complete_forward";
-  if (pos === "RW" || pos === "LW") return "winger";
-  if (pos === "CAM") return "playmaker";
-  if (pos === "CM") return "box_to_box";
-  if (pos === "CDM") return "destroyer";
-  if (pos === "CB") return "stopper";
-  if (pos === "LB" || pos === "RB") return "fullback";
-  if (pos === "LWB" || pos === "RWB") return "wingback";
-  if (pos === "GK") return "shot_stopper";
-  return "balanced";
-}
-
-export function createCareerPlayer(world: World, opts: CareerCreateOptions): CareerPlacement {
-  const age = opts.age ?? 17;
-  const potential = opts.potential ?? 82;
-  let ca = opts.startingAbility ?? Math.min(potential - 12, enforceAgeOvrCap(62, age));
-  ca = enforceAgeOvrCap(ca, age);
-
-  const profile = opts.physicalProfile ?? "Athletic";
-  const arch = opts.playArchetype ?? defaultArchetype(opts.position);
-  const secondaries =
-    opts.secondaryPositions?.length ? opts.secondaryPositions : defaultSecondaries(opts.position);
-
-  const attributes = createBaseAttributes(ca);
-  applyPositionBias(attributes, opts.position);
-  applyArchetype(attributes, arch);
-
-  // Weak foot soft signal via preferred foot (both = more balanced tech)
-  if (opts.preferredFoot === "Both") {
-    attributes.technical.dribbling = Math.min(99, attributes.technical.dribbling + 2);
-    attributes.technical.passing = Math.min(99, attributes.technical.passing + 2);
+    boost(ment, "positioning", 10);
+    boost(ment, "reactions", 10);
   }
 
-  let ovr = enforceAgeOvrCap(calculateOVR(attributes, opts.position), age);
+  return { technical: tech, physical: phys, mental: ment };
+}
 
-  const personality = generatePersonality(world.rng, age);
+export function defaultStartingAbility(age: number, potential: number, rng: RNG): number {
+  const ageBase = 40 + age * 1.2;
+  const potBonus = (potential - 70) * 0.25;
+  return clamp(ageBase + potBonus + rng.normal(0, 3), 40, 78);
+}
+
+export function findEligibleClubs(
+  world: World,
+  ovr: number,
+  potential: number,
+  age: number,
+  position: Position
+): { club: Club; pathway: CareerPathway; role: SelectionRole; score: number }[] {
+  const results: { club: Club; pathway: CareerPathway; role: SelectionRole; score: number }[] = [];
+
+  for (const club of world.clubs.values()) {
+    const squad = club.squadPlayerIds
+      .map((id) => world.players.get(id)!)
+      .filter((p) => p && !p.retired);
+
+    const posPlayers = squad.filter(
+      (p) => p.primaryPosition === position || p.secondaryPositions.includes(position)
+    );
+    const posDepth = posPlayers.length;
+    const avgPosOVR =
+      posDepth > 0
+        ? posPlayers.reduce((s, p) => s + p.ovr, 0) / posDepth
+        : club.reputation * 0.9;
+
+    if (club.reputation >= 82) {
+      if (age <= 19 && potential >= 78) {
+        results.push({
+          club,
+          pathway: "EliteAcademy",
+          role: "Academy",
+          score: potential * 0.6 + (100 - club.reputation) * 0.2 + world.rng.float(0, 5),
+        });
+      } else if (age <= 21 && ovr >= avgPosOVR - 5 && potential >= 82) {
+        results.push({
+          club,
+          pathway: "EliteAcademy",
+          role: "Reserve",
+          score: ovr * 0.4 + potential * 0.4,
+        });
+      }
+      continue;
+    }
+
+    if (club.reputation >= 70) {
+      if (age <= 20 && potential >= 72) {
+        results.push({
+          club,
+          pathway: "MidAcademy",
+          role: ovr >= avgPosOVR - 8 ? "Reserve" : "Academy",
+          score: potential * 0.5 + ovr * 0.3 + (75 - Math.abs(club.reputation - 74)),
+        });
+      }
+      if (ovr >= avgPosOVR - 3 && age >= 18) {
+        results.push({
+          club,
+          pathway: "MidAcademy",
+          role: ovr >= avgPosOVR ? "Rotation" : "Bench",
+          score: ovr * 0.6 + potential * 0.2,
+        });
+      }
+      continue;
+    }
+
+    if (ovr >= avgPosOVR - 10) {
+      let role: SelectionRole = "Bench";
+      if (ovr >= avgPosOVR + 3) role = "Starter";
+      else if (ovr >= avgPosOVR - 2) role = "Rotation";
+      else if (age <= 19) role = "Reserve";
+
+      results.push({
+        club,
+        pathway: "LowerLeague",
+        role,
+        score: ovr * 0.5 + (70 - club.reputation) * 0.3 + (posDepth < 3 ? 10 : 0),
+      });
+    } else if (age <= 18 && potential >= 65) {
+      results.push({
+        club,
+        pathway: "LowerLeague",
+        role: "Academy",
+        score: potential * 0.4 + 20,
+      });
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score);
+}
+
+export function createCareerPlayer(
+  world: World,
+  opts: PlayerCreationOptions
+): PlacementResult {
+  const rng = world.rng;
+  const age = Math.max(15, Math.min(23, opts.age));
+  const potential = clamp(opts.potential ?? rng.int(68, 88), 55, 95);
+  const ca =
+    opts.startingAbility ??
+    defaultStartingAbility(age, potential, rng);
+
+  const attrs = generateAttributesFromAbility(rng, opts.position, ca);
+  const ovr = calculateOVR(attrs, opts.position);
+
   const year = 2026 - age;
-  const heightCm = heightForProfile(profile, opts.heightCm);
+  const dob: GameDate = `${year}-${String(rng.int(1, 12)).padStart(2, "0")}-${String(rng.int(1, 28)).padStart(2, "0")}`;
 
   const player: Player = {
-    id: nextId("pl"),
+    id: nextId("plr"),
     firstName: opts.firstName,
     lastName: opts.lastName,
     displayName: `${opts.firstName} ${opts.lastName}`,
-    nationality: opts.nationality ?? "England",
-    dateOfBirth: `${year}-03-15`,
+    nationality: opts.nationality,
+    dateOfBirth: dob,
     age,
-    heightCm,
-    preferredFoot: opts.preferredFoot ?? "Right",
-    physicalProfile: profile,
+    heightCm: opts.heightCm ?? (opts.physicalProfile === "Tall" ? 188 : opts.physicalProfile === "Slight" ? 172 : 178),
+    preferredFoot: opts.preferredFoot,
+    physicalProfile: opts.physicalProfile,
     primaryPosition: opts.position,
-    secondaryPositions: secondaries,
-    attributes,
+    secondaryPositions: [],
+    attributes: attrs,
     ovr,
     potential,
     currentClubId: null,
     contract: null,
     state: createEmptyState(),
-    reputation: Math.round(ovr * 0.5),
+    reputation: clamp(ovr * 0.5 + age * 0.5, 20, 60),
     isUserControlled: true,
     careerAppearances: 0,
     careerGoals: 0,
     careerAssists: 0,
     careerTrophies: 0,
     injuryIds: [],
-    personalityId: personality.id,
+    personalityId: null,
     retired: false,
     retirementDate: null,
   };
+  player.potential = Math.max(player.potential, player.ovr);
 
-  // Store archetype for UI / roles
-  (player as any).playArchetype = arch;
-
+  const personality = createPersonalityFromOptions(rng, {});
+  player.personalityId = personality.id;
   if (!(world as any).personalities) (world as any).personalities = new Map();
   (world as any).personalities.set(personality.id, personality);
 
-  const clubs = [...world.clubs.values()].sort((a, b) => a.reputation - b.reputation);
-  let club: Club | null = null;
+  const eligible = findEligibleClubs(world, ovr, potential, age, opts.position);
 
-  if (opts.clubId) {
-    club = world.clubs.get(opts.clubId as EntityId) ?? null;
-  }
-  if (!club) {
-    const mid = clubs.filter((c) => c.reputation >= 55 && c.reputation <= 78);
-    club = mid[Math.floor(mid.length / 2)] ?? clubs[Math.floor(clubs.length / 2)] ?? null;
-  }
-
-  if (club) {
-    player.currentClubId = club.id;
-    player.contract = {
-      clubId: club.id,
-      wage: Math.max(500, Math.round(ovr * ovr * 3)),
-      startDate: world.calendar.currentDate,
-      endDate: `${parseInt(world.calendar.currentDate.slice(0, 4), 10) + 3}-06-30`,
-      releaseClause: Math.round(estimateSimpleValue(ovr, potential, age)),
-      signedDate: world.calendar.currentDate,
-    };
-    club.squadPlayerIds.push(player.id);
-    club.finances.currentWageBillWeekly += player.contract.wage;
-  }
-
-  world.players.set(player.id, player);
-  world.userPlayerId = player.id;
-
-  const reason = club
-    ? `Signed for ${club.name} as a ${arch.replace(/_/g, " ")} ${opts.position} — ${ovr} OVR / ${potential} POT.`
-    : `Created ${player.displayName} as free agent.`;
-
-  return { player, club, reason };
-}
-
-export function reassignStarterClub(world: World, clubId: string): CareerPlacement | null {
-  const pid = world.userPlayerId;
-  if (!pid) return null;
-  const player = world.players.get(pid);
-  const newClub = world.clubs.get(clubId as EntityId);
-  if (!player || !newClub) return null;
-  if (player.careerAppearances > 0) return null;
-
-  const oldId = player.currentClubId;
-  if (oldId) {
-    const old = world.clubs.get(oldId);
-    if (old) {
-      old.squadPlayerIds = old.squadPlayerIds.filter((id) => id !== pid);
-      if (player.contract) {
-        old.finances.currentWageBillWeekly = Math.max(
-          0,
-          old.finances.currentWageBillWeekly - (player.contract.wage ?? 0)
-        );
+  if (opts.preferredClubId) {
+    const preferred = world.clubs.get(opts.preferredClubId as any);
+    if (preferred) {
+      const pathway: CareerPathway =
+        preferred.reputation >= 82 ? "EliteAcademy" : preferred.reputation >= 70 ? "MidAcademy" : "LowerLeague";
+      const role: SelectionRole =
+        preferred.reputation >= 82 ? "Academy" : preferred.reputation >= 70 ? (age <= 18 ? "Academy" : "Reserve") : "Rotation";
+      player.currentClubId = preferred.id;
+      player.contract = makeYouthContract(player, preferred, world.calendar.currentDate);
+      if (role === "Academy") {
+        preferred.academyPlayerIds.push(player.id);
+        if (!preferred.squadPlayerIds.includes(player.id)) preferred.squadPlayerIds.push(player.id);
+      } else {
+        preferred.squadPlayerIds.push(player.id);
       }
+      addPlayer(world, player);
+      assignAgent(world, player.id);
+      assignStartingPlayStyles(player);
+      world.userPlayerId = player.id;
+      return {
+        player,
+        club: preferred,
+        pathway,
+        role,
+        reason: `You chose ${preferred.name}. ${pathway === "EliteAcademy" ? "Elite pathway — earn every minute." : pathway === "MidAcademy" ? "Competitive pathway with a route to the first team." : "A club where young players can play."}`,
+      };
     }
   }
 
-  player.currentClubId = newClub.id;
-  const wage = player.contract?.wage ?? Math.max(500, Math.round(player.ovr * player.ovr * 3));
-  player.contract = {
-    clubId: newClub.id,
-    wage,
-    startDate: world.calendar.currentDate,
-    endDate: `${parseInt(world.calendar.currentDate.slice(0, 4), 10) + 3}-06-30`,
-    releaseClause: player.contract?.releaseClause ?? null,
-    signedDate: world.calendar.currentDate,
-  };
-  if (!newClub.squadPlayerIds.includes(pid)) newClub.squadPlayerIds.push(pid);
-  newClub.finances.currentWageBillWeekly += wage;
+  if (eligible.length === 0) {
+    const fallback = [...world.clubs.values()].sort((a, b) => a.reputation - b.reputation)[0]!;
+    player.currentClubId = fallback.id;
+    player.contract = makeYouthContract(player, fallback, world.calendar.currentDate);
+    fallback.squadPlayerIds.push(player.id);
+    fallback.academyPlayerIds.push(player.id);
+    addPlayer(world, player);
+    assignAgent(world, player.id);
+    assignStartingPlayStyles(player);
+    world.userPlayerId = player.id;
+
+    return {
+      player,
+      club: fallback,
+      pathway: "YouthOnly",
+      role: "Academy",
+      reason: `No strong matches; placed in ${fallback.name} academy as developmental prospect.`,
+    };
+  }
+
+  const best = eligible[0]!;
+  player.currentClubId = best.club.id;
+  player.contract = makeYouthContract(player, best.club, world.calendar.currentDate);
+
+  if (best.role === "Academy") {
+    best.club.academyPlayerIds.push(player.id);
+    if (!best.club.squadPlayerIds.includes(player.id)) {
+      best.club.squadPlayerIds.push(player.id);
+    }
+  } else {
+    best.club.squadPlayerIds.push(player.id);
+  }
+
+  addPlayer(world, player);
+  assignAgent(world, player.id);
+  assignStartingPlayStyles(player);
+  world.userPlayerId = player.id;
+
+  const reason = buildPlacementReason(player, best.club, best.pathway, best.role);
 
   return {
     player,
-    club: newClub,
-    reason: `Moved to ${newClub.name} before the season started.`,
+    club: best.club,
+    pathway: best.pathway,
+    role: best.role,
+    reason,
   };
 }
 
-function estimateSimpleValue(ovr: number, pot: number, age: number): number {
-  let v = Math.pow(ovr, 2) * 200;
-  if (age <= 21) v *= 1 + (pot - ovr) * 0.03;
-  return Math.round(v / 10000) * 10000;
+function makeYouthContract(player: Player, club: Club, date: GameDate): PlayerContract {
+  const years = player.age <= 18 ? 3 : 2;
+  const endYear = parseInt(date.slice(0, 4), 10) + years;
+  return {
+    clubId: club.id,
+    wage: Math.max(200, Math.round(player.ovr * 25 + player.age * 30)),
+    startDate: date,
+    endDate: `${endYear}-06-30`,
+    releaseClause: player.potential >= 80 ? Math.round(player.potential * 500_000) : null,
+    signedDate: date,
+  };
+}
+
+function buildPlacementReason(
+  player: Player,
+  club: Club,
+  pathway: CareerPathway,
+  role: SelectionRole
+): string {
+  const parts: string[] = [];
+  parts.push(`${player.displayName}, ${player.age}, ${player.primaryPosition}, OVR ${player.ovr} / POT ${player.potential}.`);
+  parts.push(`Joined ${club.name} (Rep ${club.reputation}) via ${pathway}.`);
+  parts.push(`Initial status: ${role}.`);
+  if (role === "Academy" || role === "Reserve") {
+    parts.push("Must earn promotion through training, form, and opportunities.");
+  }
+  return parts.join(" ");
 }
