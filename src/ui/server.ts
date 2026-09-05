@@ -151,6 +151,8 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
         clubId: body.clubId,
         playArchetype: body.playArchetype,
         secondaryPositions: body.secondaryPositions,
+        dreamId: body.dreamId,
+        identityId: body.identityId,
       });
       careerStarted = true;
       bootError = null;
@@ -216,6 +218,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
 
   if (path === "/api/advance" && method === "POST") {
     const result = api.advanceMatchday(session);
+    try { hybrid.tickScoutInterest(session); } catch {}
     return json(res, 200, { ...result, hub: hybrid.getHybridHub(session) });
   }
   if (path === "/api/train" && method === "POST") {
@@ -266,6 +269,23 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     const body = await readBody(req);
     return json(res, 200, hybrid.declineJobApi(session, body.offerId || body.id));
   }
+  if (path === "/api/transfers/offers") {
+    return json(res, 200, { offers: (hybrid.getHybridHub(session) as any).transferOffers || [] });
+  }
+  if (path === "/api/transfers/scout" && method === "POST") {
+    return json(res, 200, hybrid.refreshScoutInterestApi(session));
+  }
+  if (path === "/api/transfers/accept" && method === "POST") {
+    const body = await readBody(req);
+    return json(res, 200, hybrid.acceptTransferOfferApi(session, String(body.offerId || body.id || "")));
+  }
+  if (path === "/api/transfers/decline" && method === "POST") {
+    const body = await readBody(req);
+    return json(res, 200, hybrid.declineTransferOfferApi(session, String(body.offerId || body.id || "")));
+  }
+  if (path === "/api/match/state") {
+    return json(res, 200, { state: api.getPlayableState(session) });
+  }
   if (path === "/api/match/start" && method === "POST") {
     try {
       const state = api.beginPlayableMatch(session);
@@ -280,6 +300,7 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
   }
   if (path === "/api/match/finish" && method === "POST") {
     const state = api.skipToFullTime(session);
+    try { hybrid.tickScoutInterest(session); } catch {}
     return json(res, 200, {
       state,
       report: api.getPostMatchReport(session),
@@ -325,10 +346,8 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  if (path === "/" || path === "/index.html") {
-    return serveStatic(res, join(publicDir, "index.html"));
-  }
-  if (path === "/app" || path === "/app.html") {
+  // Landscape app is the primary experience
+  if (path === "/" || path === "/index.html" || path === "/app" || path === "/app.html") {
     return serveStatic(res, join(publicDir, "app.html"));
   }
 
