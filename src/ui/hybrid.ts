@@ -22,6 +22,12 @@ import {
 } from "../managers/career.js";
 import { spendSkillPointTowardPlayStyle, getSkillPoints } from "../players/skill-points.js";
 import { getPlayerPlayStyles } from "../players/playstyles.js";
+import {
+  generateScoutInterest,
+  snapshotTransferOffers,
+  acceptTransferOffer,
+  declineTransferOffer,
+} from "../career/transfer-offers.js";
 
 function safe<T>(fn: () => T, fallback: T): T {
   try {
@@ -63,6 +69,7 @@ export function getHybridHub(session: GameSession) {
     negotiation: safe(() => snapshotNegotiation(w), null),
     roles: safe(() => snapshotRoles(w), null),
     jobOffers: safe(() => snapshotJobOffers(w), []),
+    transferOffers: safe(() => snapshotTransferOffers(w), []),
   };
 }
 
@@ -98,48 +105,7 @@ export function setRoleApi(
 
 export function markInboxApi(session: GameSession, id?: string) {
   markInboxRead(session.world, id);
-  return { ok: true, inbox: snapshotInbox(session.world) };
-}
-
-export function getNarrativeThreads(
-  session: GameSession,
-  opts?: { playerId?: string; limit?: number }
-) {
-  return safe(
-    () =>
-      snapshotThreads(session.world, {
-        playerId: opts?.playerId as any,
-        limit: opts?.limit ?? 20,
-      }),
-    []
-  );
-}
-
-export function spendPlayStylePoint(session: GameSession, playStyleId: string) {
-  const pid = session.world.userPlayerId;
-  if (!pid) return { ok: false, message: "No player" };
-  const player = session.world.players.get(pid);
-  if (!player) return { ok: false, message: "No player" };
-  try {
-    const result = spendSkillPointTowardPlayStyle(session.world, player, playStyleId as any);
-    return {
-      ok: true,
-      result,
-      skillPoints: getSkillPoints(player),
-      styles: getPlayerPlayStyles(player),
-    };
-  } catch (e: any) {
-    return { ok: false, message: String(e?.message ?? e) };
-  }
-}
-
-export function listJobOffersApi(session: GameSession) {
-  try {
-    generateJobOffers(session.world);
-  } catch {
-    /* ignore */
-  }
-  return { offers: snapshotJobOffers(session.world) };
+  return { inbox: snapshotInbox(session.world, 10) };
 }
 
 export function takeJobApi(session: GameSession, offerId: string) {
@@ -152,11 +118,43 @@ export function declineJobApi(session: GameSession, offerId?: string) {
   return { ok, hub: getHybridHub(session), offers: snapshotJobOffers(session.world) };
 }
 
-export function refreshJobOffersApi(session: GameSession) {
+export function refreshJobsApi(session: GameSession) {
   const offers = generateJobOffers(session.world);
   return {
     count: offers.length,
     offers: snapshotJobOffers(session.world),
     hub: getHybridHub(session),
   };
+}
+
+export function spendPlayStyleApi(session: GameSession, playStyleId: string) {
+  const pid = session.world.userPlayerId;
+  if (!pid) return { ok: false };
+  try {
+    spendSkillPointTowardPlayStyle(session.world, pid, playStyleId);
+    return { ok: true, hub: getHybridHub(session) };
+  } catch (e: any) {
+    return { ok: false, message: String(e?.message || e), hub: getHybridHub(session) };
+  }
+}
+
+export function refreshScoutInterestApi(session: GameSession) {
+  generateScoutInterest(session.world, true);
+  return { offers: snapshotTransferOffers(session.world), hub: getHybridHub(session) };
+}
+
+export function acceptTransferOfferApi(session: GameSession, offerId: string) {
+  const res = acceptTransferOffer(session.world, offerId);
+  return { ...res, offers: snapshotTransferOffers(session.world), hub: getHybridHub(session) };
+}
+
+export function declineTransferOfferApi(session: GameSession, offerId: string) {
+  const res = declineTransferOffer(session.world, offerId);
+  return { ...res, offers: snapshotTransferOffers(session.world), hub: getHybridHub(session) };
+}
+
+export function tickScoutInterest(session: GameSession) {
+  try {
+    generateScoutInterest(session.world, false);
+  } catch {}
 }
