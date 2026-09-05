@@ -282,20 +282,59 @@ export function getNextUserFixture(session: GameSession) {
   const player = session.world.players.get(pid);
   if (!player?.currentClubId) return null;
   const clubId = player.currentClubId;
-  const upcoming = [...session.world.matches.values()]
+
+  const fromFixtures = [...session.world.fixtures.values()]
+    .filter(
+      (f) =>
+        !f.played &&
+        (f.homeClubId === clubId || f.awayClubId === clubId)
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || a.matchday - b.matchday);
+  if (fromFixtures[0]) return fromFixtures[0];
+
+  const fromMatches = [...session.world.matches.values()]
     .filter(
       (m) =>
         m.status !== "Finished" &&
         (m.home.clubId === clubId || m.away.clubId === clubId)
     )
     .sort((a, b) => a.date.localeCompare(b.date));
-  return upcoming[0] ?? null;
+  return fromMatches[0] ?? null;
 }
 
 export function beginPlayableMatch(session: GameSession) {
-  const fx = getNextUserFixture(session);
+  const fx = getNextUserFixture(session) as any;
   if (!fx) throw new Error("No fixture available");
-  session.playable = startPlayableMatch(session.world, fx.id);
+
+  const homeId = fx.homeClubId ?? fx.home?.clubId;
+  const awayId = fx.awayClubId ?? fx.away?.clubId;
+  const date = fx.date ?? session.world.calendar.currentDate;
+  const competitionId = fx.competitionId ?? session.competitionId ?? null;
+  if (!homeId || !awayId) throw new Error("No fixture available");
+
+  session.playable = startPlayableMatch(
+    session.world,
+    homeId,
+    awayId,
+    date,
+    competitionId
+  );
+
+  const userId = session.world.userPlayerId;
+  if (userId && session.playable?.match) {
+    const m = session.playable.match;
+    const user = session.world.players.get(userId);
+    const clubId = user?.currentClubId;
+    if (clubId === m.home.clubId && !m.home.startingXI.includes(userId)) {
+      if (m.home.startingXI.length >= 11) m.home.startingXI[10] = userId;
+      else m.home.startingXI.push(userId);
+    }
+    if (clubId === m.away.clubId && !m.away.startingXI.includes(userId)) {
+      if (m.away.startingXI.length >= 11) m.away.startingXI[10] = userId;
+      else m.away.startingXI.push(userId);
+    }
+  }
+
   return playableSnapshot(session.playable);
 }
 
@@ -323,9 +362,17 @@ export function skipToFullTime(session: GameSession) {
 }
 
 export function beginContinuousMatch(session: GameSession) {
-  const fx = getNextUserFixture(session);
+  const fx = getNextUserFixture(session) as any;
   if (!fx) throw new Error("No fixture");
-  return continuousSnapshot(startContinuousMatch(session.world, fx.id));
+  const matchId = fx.matchId || fx.id;
+  if (fx.homeClubId && !fx.home) {
+    // fixture only — continuous needs a Match; start playable path creates one
+    beginPlayableMatch(session);
+    const m = session.playable?.match;
+    if (!m) throw new Error("No fixture");
+    return continuousSnapshot(startContinuousMatch(session.world, m.id));
+  }
+  return continuousSnapshot(startContinuousMatch(session.world, String(matchId)));
 }
 
 export function continuousTick(session: GameSession, n = 1) {
