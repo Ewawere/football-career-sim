@@ -31,6 +31,7 @@ import {
   startPlayableMatch,
   resolveHighlight,
   autoCompletePlayable,
+  completeAfterDecisions,
   playableSnapshot,
   type PlayableMatchSession,
 } from "../matches/playable.js";
@@ -320,21 +321,6 @@ export function beginPlayableMatch(session: GameSession) {
     competitionId
   );
 
-  const userId = session.world.userPlayerId;
-  if (userId && session.playable?.match) {
-    const m = session.playable.match;
-    const user = session.world.players.get(userId);
-    const clubId = user?.currentClubId;
-    if (clubId === m.home.clubId && !m.home.startingXI.includes(userId)) {
-      if (m.home.startingXI.length >= 11) m.home.startingXI[10] = userId;
-      else m.home.startingXI.push(userId);
-    }
-    if (clubId === m.away.clubId && !m.away.startingXI.includes(userId)) {
-      if (m.away.startingXI.length >= 11) m.away.startingXI[10] = userId;
-      else m.away.startingXI.push(userId);
-    }
-  }
-
   return playableSnapshot(session.playable);
 }
 
@@ -345,8 +331,33 @@ export function getPlayableState(session: GameSession) {
 
 export function chooseHighlightAction(session: GameSession, actionId: string) {
   if (!session.playable) throw new Error("No live match");
-  resolveHighlight(session.world, session.playable, actionId);
-  return playableSnapshot(session.playable);
+  const outcome = resolveHighlight(session.world, session.playable, actionId);
+  const snap = playableSnapshot(session.playable);
+
+  // All decisions done → finish the rest of the match
+  if (!snap.moment && session.playable.momentsResolved >= session.playable.momentsPlanned) {
+    completeAfterDecisions(session.world, session.playable);
+    // mark fixture
+    const m = session.playable.match;
+    for (const f of session.world.fixtures.values()) {
+      if (
+        !f.played &&
+        ((f.homeClubId === m.home.clubId && f.awayClubId === m.away.clubId) ||
+          (f.homeClubId === m.away.clubId && f.awayClubId === m.home.clubId))
+      ) {
+        f.played = true;
+        f.matchId = m.id as any;
+        break;
+      }
+    }
+    return {
+      outcome,
+      state: playableSnapshot(session.playable),
+      finished: true,
+    };
+  }
+
+  return { outcome, state: snap, finished: false };
 }
 
 export function skipToFullTime(session: GameSession) {
