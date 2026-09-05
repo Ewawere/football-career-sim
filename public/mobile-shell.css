@@ -1,7 +1,95 @@
-/**
- * Shell extras - landscape-first. Never constrain to phone portrait width.
- */
+/* Mobile-first overrides */
+
+/* ========== MOBILE-FIRST OVERRIDE (v3) ========== */
 html, body, #app {
-  max-width: none !important;
+  max-width: 100% !important;
   width: 100% !important;
+}
+aside { display: none !important; }
+
+.bottom-nav {
+  display: flex !important;
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  z-index: 100 !important;
+}
+
+.bottom-nav button {
+  flex: 1 !important;
+  max-width: none !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  font-size: 10px !important;
+  min-height: 48px !important;
+}
+
+@media (max-width: 699px) {
+  .hub-grid,
+  .match-layout,
+  .social-grid,
+  .grid-2,
+  .grid-4 {
+    grid-template-columns: 1fr !important;
+  }
+  .hub-grid > .hero-card,
+  .hub-grid > .panel,
+  .hub-grid > .hub-lower {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+  .content {
+    padding: 12px 12px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .decision-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .teams {
+    flex-wrap: wrap !important;
+  }
+  .score-mid { min-width: 0 !important; width: 100%; order: -1; margin-bottom: 8px; }
+}
+
+/* Portrait is first-class — never hide the app */
+@media (orientation: portrait) {
+  #app, #gate { visibility: visible !important; }
+  body::before { display: none !important; content: none !important; }
+}
+
+@media (max-width: 699px) {
+  .unlock-row {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+  .unlock-row .sp-btn,
+  .unlock-row .ghost {
+    flex: 1 1 40% !important;
+    min-height: 44px !important;
+  }
+  .panel .actions {
+    flex-direction: column !important;
+  }
+  .panel .actions .btn,
+  .panel .actions .ghost {
+    width: 100% !important;
+  }
+  .hero-top {
+    flex-wrap: wrap !important;
+  }
+  .hero-metrics {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .scoreboard .team .tn {
+    font-size: 12px !important;
+  }
+  .gate h1, .gate-title {
+    font-size: 24px !important;
+  }
+  .choice-card .c-title { font-size: 15px !important; }
+  .choice-card .c-meta { font-size: 13px !important; }
 }
