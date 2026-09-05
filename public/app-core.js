@@ -1,133 +1,84 @@
-const $ = (id) => document.getElementById(id);
+/** Core UI state + render helpers */
+
 let hub = null;
 let view = "hub";
 let lastMatch = null;
+window.lastComparison = null;
 
-const CREST_PALETTES = [
-  ["#b91c1c", "#7f1d1d"],
-  ["#1d4ed8", "#1e3a8a"],
-  ["#047857", "#064e3b"],
-  ["#a16207", "#713f12"],
-  ["#6d28d9", "#4c1d95"],
-  ["#0e7490", "#155e75"],
-  ["#be123c", "#9f1239"],
-  ["#1e293b", "#0f172a"],
-];
-
-async function api(path, opts) {
-  const r = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     ...opts,
   });
-  if (!r.ok) throw new Error((await r.text()) || r.statusText);
-  return r.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(text.slice(0, 180) || res.statusText);
+  }
+  if (!res.ok || data.error) {
+    throw new Error(data.error || data.message || text.slice(0, 180) || res.statusText);
+  }
+  return data;
 }
 
 function toast(msg) {
-  const el = $("toast");
-  if (!el) return;
-  el.textContent = msg;
+  let el = document.getElementById("toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "toast";
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = String(msg).slice(0, 200);
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2800);
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("show"), 3200);
 }
 
 function setView(v) {
-  view = v;
+  view = v || "hub";
   document.querySelectorAll("#bottomNav button").forEach((b) => {
-    b.classList.toggle("active", b.getAttribute("data-view") === v);
+    b.classList.toggle("active", b.getAttribute("data-view") === view);
   });
   render();
 }
 
-async function refresh() {
-  hub = await api("/api/hub");
-  if (view === "match") {
-    await loadMatchStats();
-  } else render();
-  return hub;
+function money(n) {
+  if (n == null || Number.isNaN(n)) return "—";
+  if (n >= 1e6) return `€${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `€${Math.round(n / 1e3)}K`;
+  return `€${n}`;
 }
 
-function hashStr(s) {
-  let h = 0;
-  for (let i = 0; i < String(s || "").length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h);
+function initials(name) {
+  if (!name) return "?";
+  const parts = String(name).trim().split(/\s+/);
+  return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?";
+}
+
+function formDots(form) {
+  const f = Math.max(0, Math.min(100, Number(form) || 50));
+  const filled = Math.round(f / 20);
+  return `<span class="form-dots">${"●".repeat(filled)}${"○".repeat(5 - filled)}</span>`;
 }
 
 function clubCrest(name, size, cls) {
   if (typeof Crests !== "undefined" && Crests.crestImgHtml) {
-    return Crests.crestImgHtml(name, size || 48, cls || "crest-img lg");
+    return Crests.crestImgHtml(name || "FC", size || 24, cls || "crest-img");
   }
-  const letters = String(name || "FC").slice(0, 3).toUpperCase();
-  return `<span class="team-crest" style="${crestStyle(name)}">${letters}</span>`;
+  return "";
 }
 
-function crestStyle(name) {
-  const [a, b] = CREST_PALETTES[hashStr(name) % CREST_PALETTES.length];
-  return `background:linear-gradient(145deg,${a},${b})`;
-}
-
-function initials(name) {
-  const p = String(name || "P").trim().split(/\s+/);
-  return ((p[0]?.[0] || "P") + (p[1]?.[0] || "")).toUpperCase();
-}
-
-function formDots(form) {
-  const n = Math.max(0, Math.min(6, Math.round((Number(form) || 50) / 16.6)));
-  let html = "";
-  for (let i = 0; i < 6; i++) html += `<i data-on="${i < n ? "1" : "0"}"></i>`;
-  const label = form >= 75 ? "Excellent" : form >= 60 ? "Good" : form >= 45 ? "Average" : "Poor";
-  return `<div class="form-dots">${html}<span class="form-label">${label}</span></div>`;
-}
-
-function money(v) {
-  if (v == null || v === "") return "—";
-  if (typeof v === "string") return v;
-  if (v >= 1e6) return `€${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `€${Math.round(v / 1e3)}K`;
-  return `€${v}`;
-}
-
-function spValue(p) {
-  const s = p?.skillPoints;
-  if (s == null) return 0;
-  if (typeof s === "number") return s;
-  return s.available ?? s.points ?? s.unspent ?? 0;
-}
-
-function runEnterAnimations(root) {
-  if (!root) return;
-  root.querySelectorAll("[data-w]").forEach((el, i) => {
-    const w = el.getAttribute("data-w");
-    el.style.width = "0%";
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        el.style.width = w + "%";
-      }, 40 + i * 40);
-    });
-  });
-  root.querySelectorAll(".form-dots i[data-on='1']").forEach((dot, i) => {
-    setTimeout(() => dot.classList.add("on"), 120 + i * 70);
-  });
-  const sc = root.querySelector(".score-card");
-  if (sc && view === "match") {
-    sc.classList.add("ft-flash");
-    setTimeout(() => sc.classList.remove("ft-flash"), 1000);
+async function refresh() {
+  try {
+    hub = await api("/api/hub");
+    render();
+  } catch (e) {
+    console.error(e);
+    toast(String(e.message || e).slice(0, 120));
   }
-  root.querySelectorAll("[data-count]").forEach((el) => {
-    const target = Number(el.getAttribute("data-count"));
-    if (Number.isNaN(target)) return;
-    const isFloat = String(el.getAttribute("data-count")).includes(".");
-    const start = performance.now();
-    const dur = 650;
-    function tick(now) {
-      const t = Math.min(1, (now - start) / dur);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const val = target * eased;
-      el.textContent = isFloat ? val.toFixed(1) : String(Math.round(val));
-      if (t < 1) requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-  });
 }
 
 async function loadMatchStats() {
@@ -155,44 +106,115 @@ async function loadMatchStats() {
         shotsAway: as_.shots ?? 0,
         youRating: user?.rating,
         youLine: user
-          ? `You: ${user.rating}${user.assists ? ` · ${user.assists} assist` : ""}${user.goals ? ` · ${user.goals} goal` : ""}`
-          : undefined,
-        minutes: user?.minutes || 90,
-        assists: user?.assists ?? 0,
-        goals: user?.goals ?? 0,
+          ? `You: ${user.rating}${user.goals ? ` · ${user.goals}G` : ""}${user.assists ? ` · ${user.assists}A` : ""}`
+          : "Full time",
         venue: data.venue || "Stadium",
-        mentality: data.mentality || "Home Attacking · Away Balanced",
       };
+      if (view === "match") render();
     }
   } catch (_) {}
-  render();
+}
+
+function buildStorylines(p) {
+  const apps = p.apps ?? 0;
+  const goals = p.goals ?? 0;
+  const trust = Math.round(p.trust ?? p.managerTrust ?? 50);
+  const form = Math.round(p.form ?? 50);
+  const items = [];
+
+  if (apps === 0) {
+    items.push({
+      title: "Waiting for a chance",
+      body: "No league appearances yet. Train, then play your next fixture.",
+      icon: "⏳",
+    });
+  } else if (apps < 5) {
+    items.push({
+      title: "Breaking into the side",
+      body: `${apps} app${apps === 1 ? "" : "s"} so far. Keep ratings high to lock a start.`,
+      icon: "⚡",
+    });
+  } else {
+    items.push({
+      title: "Established minutes",
+      body: `${apps} appearances · ${goals} goals · ${p.assists ?? 0} assists this career.`,
+      icon: "📊",
+    });
+  }
+
+  if (goals >= 1) {
+    items.push({
+      title: "On the scoresheet",
+      body: `${goals} career goal${goals === 1 ? "" : "s"}. Strikers notice — so do scouts.`,
+      icon: "⚽",
+    });
+  } else if (apps > 0) {
+    items.push({
+      title: "Still hunting a goal",
+      body: "In the side but no goal yet. Take the next chance when it comes.",
+      icon: "🎯",
+    });
+  }
+
+  if (trust >= 70) {
+    items.push({
+      title: "Manager's trust",
+      body: `Trust ${trust}%. You're in the plans — don't waste it.`,
+      icon: "🛡️",
+    });
+  } else if (trust < 40) {
+    items.push({
+      title: "Under pressure",
+      body: `Trust only ${trust}%. Need a strong rating soon.`,
+      icon: "⚠️",
+    });
+  } else {
+    items.push({
+      title: "Building trust",
+      body: `Manager trust ${trust}%. Solid performances move the needle.`,
+      icon: "📈",
+    });
+  }
+
+  if (form >= 75) {
+    items.push({
+      title: "In form",
+      body: `Form ${form}. Good time to demand starts and push PlayStyles.`,
+      icon: "🔥",
+    });
+  }
+
+  return items.slice(0, 4);
 }
 
 function renderHub() {
-  if (!hub) return `<div class="card">Loading hub…</div>`;
-  const p = hub.player || {};
-  const ps = p.playStyles || {};
-  const unlocked = ps.unlocked || [];
-  const near = ps.near || [];
-  const sp = spValue(p);
-  const trust = p.managerTrust ?? p.trust ?? 0;
-  const threads = hub.threads || [];
-  const clubName = p.club || "Free agent";
+  const p = hub?.player || {};
+  const clubName = p.club || p.clubName || "Free agent";
+  const trust = p.trust ?? p.managerTrust ?? 50;
+  const sp = p.skillPoints ?? 0;
+  const unlocked = (p.playStyles && p.playStyles.unlocked) || [];
   const chips = unlocked.length
-    ? unlocked.map((s) => `<span class="chip ${s.plus ? "plus" : ""}">${s.name || s.id}${s.plus ? "+" : ""}</span>`).join("")
-    : `<span class="muted">Train & play to unlock PlayStyles</span>`;
-  const nearRows = near.length
-    ? near.map((n) => {
-        const miss = Array.isArray(n.missing) ? n.missing.join(", ") : n.missing || "requirements";
-        return `<div class="unlock-row"><div class="unlock-ico">${n.emoji || "◎"}</div><div style="flex:1"><div class="unlock-title">${n.name || n.id}</div><div class="muted">missing ${miss}</div></div><button class="sp-btn" data-action="ps-spend" data-id="${n.id}">1 SP</button></div>`;
-      }).join("")
-    : `<p class="muted">No near unlocks — keep training attributes.</p>`;
-  const defaultStories = [
-    { title: "Breakthrough Moment", body: "Building match rhythm.", icon: "⚡" },
-    { title: "Young Lion Rising", body: "Scout attention rising.", icon: "🛡" },
-    { title: "Fan Favorite", body: "Trust growing at the club.", icon: "🏟" },
-  ];
-  const stories = (threads.length ? threads : defaultStories).slice(0, 3).map((t, i) => `<div class="story"><div class="story-thumb">${t.icon || ["⚡", "🛡", "🏟"][i] || "📰"}</div><div><div class="story-title">${t.title || t.name || "Storyline"}<span class="dot-live"></span></div><div class="story-meta">${t.body || t.summary || t.description || ""}</div></div></div>`).join("");
+    ? unlocked.map((x) => `<span class="chip">${x.name || x.id || x}</span>`).join("")
+    : `<span class="muted">Train to unlock PlayStyles</span>`;
+  const near = (p.playStyles && p.playStyles.near) || [];
+  const nearHtml = near.length
+    ? near
+        .map(
+          (x) =>
+            `<div class="unlock-row"><div class="unlock-title">${x.name || x.id}</div><div class="muted">Close — keep training</div></div>`
+        )
+        .join("")
+    : `<p class="muted" style="margin:0">No near unlocks — keep training attributes.</p>`;
+
+  const stories = buildStorylines(p)
+    .map(
+      (t) => `<div class="story">
+      <div class="story-thumb">${t.icon || "•"}</div>
+      <div><div class="story-title">${t.title}<span class="dot-live"></span></div>
+      <div class="story-meta">${t.body}</div></div></div>`
+    )
+    .join("");
+
   return `
   <div class="anim-stagger">
   <div class="card">
@@ -218,92 +240,119 @@ function renderHub() {
     <div class="stat-cell"><div class="ico">$</div><div class="lab">Value</div><div class="val" style="font-size:13px">${p.marketValueLabel || money(p.marketValue)}</div></div>
   </div>
   <div class="card" style="margin-top:11px"><div class="ps-head"><h3>PlayStyles</h3><div class="sp-hex">SP<br>${sp}</div></div><div class="chips">${chips}</div></div>
-  <div class="card"><h3 style="margin-bottom:4px">Near unlocks</h3>${nearRows}</div>
-  <div class="split">
-    <div class="card"><h3 style="margin-bottom:8px">Season Snapshot</h3>
-      <div class="table-row hdr"><span>Comp</span><span>Apps</span><span>G-A</span><span>Wage</span></div>
-      <div class="table-row"><strong>League</strong><span>${p.apps ?? 0}</span><span>${(p.goals ?? 0)+(p.assists ?? 0)}</span><span>${money(p.wage)}</span></div>
-      <button class="linkish" data-action="set-view" data-view="career" style="margin-top:8px">Full season stats →</button>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between"><h3>Storylines <span class="dot-live"></span></h3>
-      <button class="linkish" data-action="set-view" data-view="social">View all</button></div>${stories}
+  <div class="card"><h3 style="margin-bottom:8px">Near unlocks</h3>${nearHtml}</div>
+  <div class="card">
+    <h3 style="margin-bottom:8px">Season Snapshot</h3>
+    <div class="meta-row" style="grid-template-columns:repeat(4,1fr)">
+      <div><div class="meta-label">COMP</div><div style="font-weight:700">League</div></div>
+      <div><div class="meta-label">APPS</div><div style="font-weight:700">${p.apps ?? 0}</div></div>
+      <div><div class="meta-label">G-A</div><div style="font-weight:700">${(p.goals ?? 0)}-${(p.assists ?? 0)}</div></div>
+      <div><div class="meta-label">WAGE</div><div style="font-weight:700">${money(p.wage)}</div></div>
     </div>
   </div>
-  <div class="card"><h3 style="margin-bottom:10px">Quick Actions</h3>
-    <div class="qa-grid">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">Storylines</h3>
+    </div>
+    ${stories || `<p class="muted">Play matches to generate real storylines.</p>`}
+  </div>
+  <div class="card">
+    <h3 style="margin-bottom:8px">Quick Actions</h3>
+    <div class="actions">
       <button class="qa" data-action="train" data-focus="Tactical"><div class="ico">📈</div><div class="lab">Training</div></button>
       <button class="qa" data-action="set-view" data-view="match"><div class="ico">▦</div><div class="lab">Match</div></button>
-      <button class="qa" data-action="advance"><div class="ico">📅</div><div class="lab">Calendar</div></button>
-      <button class="qa" data-action="neg-open"><div class="ico">💬</div><div class="lab">Contracts</div></button>
+      <button class="qa" data-action="advance"><div class="ico">📅</div><div class="lab">Advance</div></button>
+      <button class="qa" data-action="set-view" data-view="career"><div class="ico">💬</div><div class="lab">Career</div></button>
     </div>
-  </div></div>`;
+  </div>
+  </div>`;
 }
 
 function renderMatch() {
-  const m = lastMatch || {};
-  const home = m.homeName || "Home";
-  const away = m.awayName || "Away";
-  const hs = m.homeScore ?? 0;
-  const as_ = m.awayScore ?? 0;
-  const you = m.youRating ?? "—";
-  const youLine = m.youLine || (you !== "—" ? `You: ${you}` : "Advance or play a match");
-  const possH = Math.round(m.possHome ?? 50);
-  const possA = 100 - possH;
-  const xgH = Number(m.xgHome ?? 0);
-  const xgA = Number(m.xgAway ?? 0);
-  const shH = m.shotsHome ?? 0;
-  const shA = m.shotsAway ?? 0;
-  const xgSum = xgH + xgA || 1;
-  const shSum = shH + shA || 1;
-  const cmpHtml =
-    typeof renderTeamComparison === "function"
-      ? renderTeamComparison(hub?.teamComparison || window.lastComparison || null)
-      : "";
+  const m = lastMatch || {
+    status: "Ready",
+    homeName: "Home",
+    awayName: "Away",
+    homeScore: 0,
+    awayScore: 0,
+    possHome: 50,
+    xgHome: 0,
+    xgAway: 0,
+    shotsHome: 0,
+    shotsAway: 0,
+    youLine: "Play your next fixture",
+    venue: "Stadium",
+  };
+  const possAway = 100 - (m.possHome ?? 50);
+  const cmp = window.lastComparison || hub?.teamComparison;
+  const cmpHtml = cmp
+    ? `<div class="card"><h3>Pre-match</h3><p class="muted">${cmp.headline || cmp.summary || "Next fixture ready."}</p></div>`
+    : "";
+
   return `
   <div class="anim-stagger">
-  ${cmpHtml}
-  <div class="match-header"><h1>Match Center</h1><div class="muted">${m.status || "Ready"}</div></div>
-  <div class="score-card">
-    <div class="score-row">
-      <div class="team-block">${clubCrest(home, 56, "crest-img lg")}<strong style="font-size:13px">${String(home).slice(0,3).toUpperCase()}</strong></div>
-      <div>
-        <div class="ft-label">${(m.status || "FULL TIME").toUpperCase()}</div>
-        <div class="score-num"><span data-count="${hs}">0</span> – <span data-count="${as_}">0</span></div>
-        <div class="muted" style="font-size:12px">${m.venue || "Stadium"}</div>
+  <div class="card scoreboard">
+    <div class="teams">
+      <div class="team">${clubCrest(m.homeName, 40, "crest-img")} <div class="tn">${m.homeName}</div></div>
+      <div class="score-mid">
+        <div class="score-line">${m.homeScore ?? 0} – ${m.awayScore ?? 0}</div>
+        <div class="muted">${m.status || ""}</div>
+        <div class="muted" style="font-size:11px">${m.venue || ""}</div>
       </div>
-      <div class="team-block">${clubCrest(away, 56, "crest-img lg")}<strong style="font-size:13px">${String(away).slice(0,3).toUpperCase()}</strong></div>
+      <div class="team">${clubCrest(m.awayName, 40, "crest-img")} <div class="tn">${m.awayName}</div></div>
     </div>
-    <div class="you-line">✓ ${youLine}</div>
+    <div class="pill">${m.youLine || "Advance or play a match"}</div>
+  </div>
+  ${cmpHtml}
+  <div class="card">
+    <h3 style="margin-bottom:10px">📊 MATCH STATS</h3>
+    <div class="stat-row"><span>POSSESSION</span><div class="bar"><i style="width:${m.possHome}%"></i></div><span>${m.possHome}% · ${possAway}%</span></div>
+    <div class="stat-row"><span>xG</span><div class="bar"><i style="width:${Math.min(100, (m.xgHome || 0) * 25)}%"></i></div><span>${(m.xgHome || 0).toFixed?.(2) ?? m.xgHome} · ${(m.xgAway || 0).toFixed?.(2) ?? m.xgAway}</span></div>
+    <div class="stat-row"><span>SHOTS</span><div class="bar"><i style="width:${Math.min(100, (m.shotsHome || 0) * 8)}%"></i></div><span>${m.shotsHome || 0} · ${m.shotsAway || 0}</span></div>
   </div>
   <div class="card">
-    <div class="section-label">📊 Match stats</div>
-    <div class="bar-row"><div class="bar-name">Possession</div><div class="bar-labels"><span>${possH}%</span><span>${possA}%</span></div><div class="bar-track"><div class="h" data-w="${possH}"></div><div class="a" data-w="${possA}"></div></div></div>
-    <div class="bar-row"><div class="bar-name">xG</div><div class="bar-labels"><span>${xgH.toFixed(2)}</span><span>${xgA.toFixed(2)}</span></div><div class="bar-track"><div class="h" data-w="${(xgH/xgSum)*100}"></div><div class="a" data-w="${(xgA/xgSum)*100}"></div></div></div>
-    <div class="bar-row"><div class="bar-name">Shots</div><div class="bar-labels"><span>${shH}</span><span>${shA}</span></div><div class="bar-track"><div class="h" data-w="${(shH/shSum)*100}"></div><div class="a" data-w="${(shA/shSum)*100}"></div></div></div>
-  </div>
-  <div class="card">
-    <div class="rating-card">
-      <div class="rating-hex">${(hub?.player?.position || "CM").slice(0,3)}</div>
-      <div><div class="muted">${hub?.player?.position || "—"} · ${m.minutes || 90}'</div>
-        <div class="rating-big">${typeof you === "number" ? `<span data-count="${you}">0</span>` : you}</div></div>
-      <div class="rating-stats"><div>Goals <strong>${m.goals ?? 0}</strong></div><div>Assists <strong>${m.assists ?? 0}</strong></div><div style="color:var(--teal)">★ Rating ${you}</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><strong>${hub?.player?.position || "RW"}</strong> · your rating</div>
+      <div>⭐ ${m.youRating != null ? m.youRating : "—"}</div>
     </div>
   </div>
-  <div class="mentality"><div style="font-size:18px">🧠</div><div style="flex:1"><div style="font-weight:700;font-size:13px">AI Mentality</div><div class="muted">${m.mentality || "Home Attacking · Away Balanced"}</div></div><div class="muted">›</div></div>
-  <div class="actions" style="margin-top:14px">
+  <div class="actions" style="margin-top:12px">
     <button class="btn" data-action="match-start">Play match</button>
     <button class="ghost" data-action="match-finish">Skip to FT</button>
     <button class="ghost" data-action="advance">Advance day</button>
-    <button class="ghost" data-action="refresh-cmp">Refresh preview</button>
-  </div></div>`;
+  </div>
+  </div>`;
 }
 
 function renderSocial() {
-  const posts = hub?.social || [];
   const news = hub?.news || [];
-  const items = posts.length ? posts : news.map((n) => ({ author: n.outlet || "Press", text: n.headline + (n.body ? " — " + n.body.slice(0, 120) : "") }));
-  return `<div class="anim-stagger"><div class="card"><h3 style="margin-bottom:8px">Club Social</h3>${items.length ? items.slice(0,12).map((p) => `<div class="story"><div class="story-thumb">💬</div><div><div class="story-title">${p.author || p.club || "Club"}</div><div class="story-meta">${p.text || p.body || p.headline || ""}</div></div></div>`).join("") : `<p class="muted">Advance matchdays to fill the feed.</p>`}</div></div>`;
+  const social = hub?.social || [];
+  const posts = [...news, ...social].slice(0, 20);
+  if (!posts.length) {
+    return `<div class="anim-stagger"><div class="card">
+      <h3>Social & News</h3>
+      <p class="muted">No posts yet. Play a match or advance a day — headlines and club posts will show up here.</p>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn" data-action="match-start">Play match</button>
+        <button class="ghost" data-action="advance">Advance day</button>
+      </div>
+    </div></div>`;
+  }
+  const items = posts
+    .map((p) => {
+      const title = p.headline || p.title || p.author || p.club || "Update";
+      const body = p.body || p.text || p.summary || "";
+      const likes = p.likes ?? p.reactions ?? "";
+      return `<div class="story">
+        <div class="story-thumb">📰</div>
+        <div>
+          <div class="story-title">${title}</div>
+          <div class="story-meta">${body}${likes !== "" ? ` · ❤️ ${likes}` : ""}</div>
+        </div>
+      </div>`;
+    })
+    .join("");
+  return `<div class="anim-stagger"><div class="card"><h3 style="margin-bottom:8px">Social & News</h3>${items}</div></div>`;
 }
 
 function renderCareer() {
@@ -321,12 +370,11 @@ function renderCareer() {
 }
 
 function renderMore() {
-  return `<div class="anim-stagger"><div class="card"><h3>More</h3><div class="actions"><button class="btn" data-action="advance">Advance matchday</button><button class="ghost" data-action="train" data-focus="Tactical">Train</button><button class="ghost" data-action="train" data-focus="Physical">Gym</button><button class="ghost" data-action="save">Save</button></div><p class="muted" style="margin-top:12px">${hub?.date || ""} · Season ${hub?.season || ""}</p></div>
-  <div class="card"><h3>Inbox ${hub?.inbox?.unread ? `(${hub.inbox.unread})` : ""}</h3>${(hub?.inbox?.messages || []).slice(0,6).map((m) => `<div class="story"><div class="story-thumb">✉</div><div><div class="story-title">${m.from}</div><div class="story-meta">${m.subject}<br>${m.body || ""}</div></div></div>`).join("") || `<p class="muted">No messages</p>`}</div></div>`;
+  return `<div class="anim-stagger"><div class="card"><h3>More</h3><div class="actions"><button class="btn" data-action="advance">Advance matchday</button><button class="ghost" data-action="train" data-focus="Tactical">Train</button><button class="ghost" data-action="train" data-focus="Physical">Gym</button><button class="ghost" data-action="save">Save</button></div><p class="muted" style="margin-top:12px">${hub?.date || ""} · Season ${hub?.season || ""}</p></div></div>`;
 }
 
 function render() {
-  const content = $("content");
+  const content = document.getElementById("content");
   if (!content) return;
   if (view === "hub") content.innerHTML = renderHub();
   else if (view === "match") content.innerHTML = renderMatch();
@@ -334,13 +382,17 @@ function render() {
   else if (view === "career") content.innerHTML = renderCareer();
   else if (view === "more") content.innerHTML = renderMore();
   else content.innerHTML = renderHub();
-  requestAnimationFrame(() => runEnterAnimations(content));
+
+  // fill trust bars
+  content.querySelectorAll(".trust-bar > span[data-w]").forEach((el) => {
+    el.style.width = `${el.getAttribute("data-w")}%`;
+  });
 }
 
 window.api = api;
-window.refresh = refresh;
-window.setView = setView;
 window.toast = toast;
-window.$ = $;
-window.setLastMatch = (m) => { lastMatch = m; };
+window.setView = setView;
+window.refresh = refresh;
+window.render = render;
 window.loadMatchStats = loadMatchStats;
+window.hub = () => hub;
