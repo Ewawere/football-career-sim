@@ -353,26 +353,36 @@ export function skipToFullTime(session: GameSession) {
   if (!session.playable) {
     try {
       beginPlayableMatch(session);
-    } catch {
-      return null;
+    } catch (e) {
+      console.error("[skipToFullTime] begin", e);
+      throw e;
     }
   }
-  if (session.playable) autoCompletePlayable(session.world, session.playable);
+  if (session.playable) {
+    autoCompletePlayable(session.world, session.playable);
+    const m = session.playable.match;
+    for (const f of session.world.fixtures.values()) {
+      if (
+        !f.played &&
+        ((f.homeClubId === m.home.clubId && f.awayClubId === m.away.clubId) ||
+          (f.homeClubId === m.away.clubId && f.awayClubId === m.home.clubId))
+      ) {
+        f.played = true;
+        f.matchId = m.id as any;
+        break;
+      }
+    }
+  }
   return session.playable ? playableSnapshot(session.playable) : null;
 }
 
 export function beginContinuousMatch(session: GameSession) {
   const fx = getNextUserFixture(session) as any;
   if (!fx) throw new Error("No fixture");
-  const matchId = fx.matchId || fx.id;
-  if (fx.homeClubId && !fx.home) {
-    // fixture only — continuous needs a Match; start playable path creates one
-    beginPlayableMatch(session);
-    const m = session.playable?.match;
-    if (!m) throw new Error("No fixture");
-    return continuousSnapshot(startContinuousMatch(session.world, m.id));
-  }
-  return continuousSnapshot(startContinuousMatch(session.world, String(matchId)));
+  beginPlayableMatch(session);
+  const m = session.playable?.match;
+  if (!m) throw new Error("No fixture");
+  return continuousSnapshot(startContinuousMatch(session.world, m.id));
 }
 
 export function continuousTick(session: GameSession, n = 1) {
@@ -535,18 +545,28 @@ function formatMatchStats(session: GameSession, match: any) {
       });
     }
   }
+  const hs = match.homeStats || match.home?.stats || {};
+  const as_ = match.awayStats || match.away?.stats || {};
   return {
-    score: `${match.homeScore}-${match.awayScore}`,
+    score: `${match.homeScore ?? 0}-${match.awayScore ?? 0}`,
     venue: homeClub?.stadiumName || "Stadium",
     home: {
       name: homeClub?.name || "Home",
-      short: homeClub?.shortName,
-      stats: match.home?.stats || { possession: 50, xG: 0, shots: 0 },
+      short: homeClub?.shortName || "HOM",
+      stats: {
+        possession: hs.possession ?? match.possessionHome ?? 50,
+        xG: hs.xG ?? hs.xg ?? 0,
+        shots: hs.shots ?? 0,
+      },
     },
     away: {
       name: awayClub?.name || "Away",
-      short: awayClub?.shortName,
-      stats: match.away?.stats || { possession: 50, xG: 0, shots: 0 },
+      short: awayClub?.shortName || "AWA",
+      stats: {
+        possession: as_.possession ?? 100 - (match.possessionHome ?? 50),
+        xG: as_.xG ?? as_.xg ?? 0,
+        shots: as_.shots ?? 0,
+      },
     },
     ratings,
     mentality: "Home Attacking · Away Balanced",
