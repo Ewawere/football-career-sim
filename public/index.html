@@ -85,54 +85,52 @@
             </optgroup>
           </select>
         </label>
-        <label>Body type
+        <label>Physical profile
           <select id="physicalProfile">
-            <option value="Athletic" selected>Athletic</option>
-            <option value="Slight">Slight / agile</option>
+            <option value="Slight">Slight</option>
             <option value="Average">Average</option>
+            <option value="Athletic" selected>Athletic</option>
             <option value="Powerful">Powerful</option>
             <option value="Tall">Tall</option>
           </select>
         </label>
-        <button id="toStyleStep" class="btn" style="width:100%;margin-top:8px">How do you play? →</button>
       </div>
+      <button class="btn" id="toStyleStep" style="margin-top:16px;width:100%">How you play →</button>
     </div>
 
     <div class="card" id="styleStep">
       <div class="ovr-badge">PLAY STYLE</div>
       <h2 style="margin:10px 0 4px;font-size:22px">How you play</h2>
-      <p class="muted" id="styleHint">Shapes your starting attributes</p>
-      <div id="styleList" class="style-list"></div>
-      <button id="toClubStep" class="btn" style="width:100%" disabled>Choose club →</button>
-      <button id="backToPlayer" class="ghost" style="width:100%;margin-top:8px">Back</button>
+      <p class="muted" id="styleHint">Shapes attributes</p>
+      <div class="style-list" id="styleList"></div>
+      <button class="btn" id="toClubStep" style="width:100%" disabled>Choose club →</button>
+      <button class="ghost" id="backToPlayer" style="width:100%;margin-top:8px">Back</button>
     </div>
 
     <div class="card" id="clubStep">
-      <div class="ovr-badge">CHOOSE CLUB</div>
-      <h2 style="margin:10px 0 4px;font-size:22px">Where do you start?</h2>
-      <p class="muted">Your first professional club</p>
-      <div id="clubList" class="club-list"></div>
-      <button id="confirmClub" class="btn" style="width:100%" disabled>Start Career</button>
-      <button id="backToStyle" class="ghost" style="width:100%;margin-top:8px">Back</button>
+      <div class="ovr-badge">CLUB</div>
+      <h2 style="margin:10px 0 4px;font-size:22px">Starting club</h2>
+      <p class="muted">Pick where your career begins</p>
+      <div class="club-list" id="clubList"></div>
+      <button class="btn" id="confirmClub" style="width:100%" disabled>Start Career</button>
+      <button class="ghost" id="backToStyle" style="width:100%;margin-top:8px">Back</button>
     </div>
   </div>
 
   <div id="app" class="hidden">
-    <div id="appShell">
-      <div id="content"></div>
-    </div>
-    <nav class="bottom-nav" id="bottomNav">
-      <button data-view="hub" class="active"><span class="nav-ico">⌂</span>Hub</button>
-      <button data-view="match"><span class="nav-ico">⚽</span>Match</button>
-      <button data-view="social"><span class="nav-ico">◈</span>Social</button>
-      <button data-view="career"><span class="nav-ico">💼</span>Career</button>
-      <button data-view="more"><span class="nav-ico">···</span>More</button>
+    <div id="content"></div>
+    <nav id="bottomNav">
+      <button data-view="hub" class="active"><span>⌂</span>Hub</button>
+      <button data-view="match"><span>⚽</span>Match</button>
+      <button data-view="social"><span>◇</span>Social</button>
+      <button data-view="career"><span>💼</span>Career</button>
+      <button data-view="more"><span>⋯</span>More</button>
     </nav>
   </div>
 
   <script src="/crests.js"></script>
   <script src="/app-core.js"></script>
-  <script src="/app-match-extra.js"></script>
   <script src="/app-boot.js"></script>
+  <script src="/match-live.js"></script>
 </body>
 </html>
