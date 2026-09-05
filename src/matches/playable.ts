@@ -38,7 +38,9 @@ export function startPlayableMatch(
   date: string,
   competitionId: string | null = null
 ): PlayableMatchSession {
-  const match = createMatch(world, homeClubId, awayClubId, date, competitionId);
+  const match = createMatch(world, homeClubId as any, awayClubId as any, date, competitionId as any);
+  // Store on world so stats views can find it
+  world.matches.set(match.id, match);
   const session: PlayableMatchSession = {
     match,
     phase: "PreMatch",
@@ -69,20 +71,12 @@ export function playUntilHighlight(
     session.match.away.startingXI.includes(userId);
   if (!onPitch) return null;
 
-  // Offer up to a few highlights mid-sim
   if (session.momentsResolved >= 3) return null;
   if (!world.rng.chance(0.35)) return null;
 
-  const types: MomentType[] = [
-    "ShotOpportunity",
-    "OneVOne",
-    "ThroughBall",
-    "Cross",
-    "CounterAttack",
-  ];
+  const types: MomentType[] = ["ShotOpportunity", "OneVOne", "ThroughBall", "Cross"];
   const type = world.rng.pick(types);
-  const minute = 15 + session.momentsResolved * 20 + world.rng.int(0, 10);
-  const moment = buildMoment(type, user, minute, session.match.context);
+  const moment = buildMoment(type, user, session.match.context ?? { homeScore: 0, awayScore: 0 }, true);
   session.currentMoment = moment;
   session.phase = "Highlight";
   return moment;
@@ -93,32 +87,30 @@ export function resolveHighlight(
   session: PlayableMatchSession,
   actionId: string
 ): MomentOutcome {
-  const moment = session.currentMoment;
   const userId = world.userPlayerId!;
   const user = world.players.get(userId)!;
+  const moment = session.currentMoment;
   if (!moment) {
-    return { success: false, description: "No active moment", goal: false, assist: false, ratingDelta: 0 };
+    return {
+      success: false,
+      description: "No moment",
+      goal: false,
+      goalScored: false,
+      assist: false,
+      ratingDelta: 0,
+      momentumDelta: 0,
+      stats: { goals: 0, assists: 0, shots: 0, keyPasses: 0, tackles: 0 },
+    };
   }
 
-  const outcome = resolveMoment(moment, actionId, user, world.rng);
+  const outcome = resolveMoment(moment, actionId, user, session.match.context, world.rng);
   session.lastOutcome = outcome;
-  session.momentsResolved += 1;
   session.currentMoment = null;
+  session.momentsResolved += 1;
   session.phase = "Playing";
 
-  const stats = session.match.playerStats.get(userId);
-  if (stats) {
-    if (outcome.goal) {
-      stats.goals += 1;
-      const isHome = session.match.home.startingXI.includes(userId);
-      if (isHome) session.match.homeScore += 1;
-      else session.match.awayScore += 1;
-    }
-    if (outcome.assist) stats.assists += 1;
-    stats.rating = Math.max(40, Math.min(95, stats.rating + outcome.ratingDelta));
-  }
-
-  session.match.interactiveMoments.push({
+  if (!(session.match as any).interactiveMoments) (session.match as any).interactiveMoments = [];
+  (session.match as any).interactiveMoments.push({
     minute: moment.minute,
     momentType: moment.type,
     description: moment.description,
@@ -133,20 +125,35 @@ export function resolveHighlight(
 export function autoCompletePlayable(world: World, session: PlayableMatchSession): void {
   while (session.currentMoment) {
     const user = world.players.get(world.userPlayerId!)!;
-    autoResolveMoment(session.currentMoment, user, world.rng);
+    const auto = autoResolveMoment(session.currentMoment, user, world.rng);
+    session.lastOutcome = auto.outcome ?? auto;
     session.currentMoment = null;
     session.momentsResolved += 1;
   }
-  // Finish rest of match via sim
-  simulateMatch(world, session.match, world.rng);
+  try {
+    simulateMatch(world, session.match, world.rng);
+  } catch (e) {
+    console.error("[playable] simulateMatch failed", e);
+    // Soft finish so UI is not stuck
+    session.match.status = "Finished";
+    if (session.match.homeScore == null) (session.match as any).homeScore = 0;
+    if (session.match.awayScore == null) (session.match as any).awayScore = 0;
+  }
   session.phase = "FullTime";
-  if (world.userPlayerId && session.match.playerStats.has(world.userPlayerId)) {
-    applyCareerConsequences(
-      world,
-      session.match,
-      world.userPlayerId,
-      session.match.playerStats.get(world.userPlayerId)!
-    );
+  session.match.status = "Finished";
+  world.matches.set(session.match.id, session.match);
+
+  if (world.userPlayerId && session.match.playerStats?.has(world.userPlayerId)) {
+    try {
+      applyCareerConsequences(
+        world,
+        session.match,
+        world.userPlayerId,
+        session.match.playerStats.get(world.userPlayerId)!
+      );
+    } catch (e) {
+      console.error("[playable] consequences", e);
+    }
   }
 }
 
@@ -155,6 +162,8 @@ export function playableSnapshot(session: PlayableMatchSession) {
     matchId: session.match.id,
     phase: session.phase,
     score: `${session.match.homeScore}–${session.match.awayScore}`,
+    homeClubId: session.match.home.clubId,
+    awayClubId: session.match.away.clubId,
     moment: session.currentMoment,
     lastOutcome: session.lastOutcome,
     momentsResolved: session.momentsResolved,
