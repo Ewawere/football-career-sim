@@ -14,6 +14,8 @@ import {
 } from "./moments.js";
 import type { MomentType } from "./types.js";
 import { applyCareerConsequences } from "./performance.js";
+import { Events } from "../core/events.js";
+import { onMatchFinished } from "../news/engine.js";
 
 export type PlayablePhase = "PreMatch" | "Playing" | "Highlight" | "FullTime";
 
@@ -39,7 +41,6 @@ export function startPlayableMatch(
   competitionId: string | null = null
 ): PlayableMatchSession {
   const match = createMatch(world, homeClubId as any, awayClubId as any, date, competitionId as any);
-  // Store on world so stats views can find it
   world.matches.set(match.id, match);
   const session: PlayableMatchSession = {
     match,
@@ -134,7 +135,6 @@ export function autoCompletePlayable(world: World, session: PlayableMatchSession
     simulateMatch(world, session.match, world.rng);
   } catch (e) {
     console.error("[playable] simulateMatch failed", e);
-    // Soft finish so UI is not stuck
     session.match.status = "Finished";
     if (session.match.homeScore == null) (session.match as any).homeScore = 0;
     if (session.match.awayScore == null) (session.match as any).awayScore = 0;
@@ -143,27 +143,72 @@ export function autoCompletePlayable(world: World, session: PlayableMatchSession
   session.match.status = "Finished";
   world.matches.set(session.match.id, session.match);
 
-  if (world.userPlayerId && session.match.playerStats?.has(world.userPlayerId)) {
-    try {
-      applyCareerConsequences(
-        world,
-        session.match,
-        world.userPlayerId,
-        session.match.playerStats.get(world.userPlayerId)!
-      );
-    } catch (e) {
-      console.error("[playable] consequences", e);
+  // User career totals (also runs inside engine pipeline; safe to reinforce)
+  if (world.userPlayerId) {
+    let stats = session.match.playerStats?.get(world.userPlayerId);
+    const started =
+      session.match.home.startingXI.includes(world.userPlayerId) ||
+      session.match.away.startingXI.includes(world.userPlayerId);
+    if (!stats && started) {
+      stats = {
+        playerId: world.userPlayerId,
+        minutes: 90,
+        goals: 0,
+        assists: 0,
+        shots: 0,
+        shotsOnTarget: 0,
+        keyPasses: 0,
+        tackles: 0,
+        fouls: 0,
+        errors: 0,
+        yellow: false,
+        red: false,
+        rating: 65,
+      } as any;
+      session.match.playerStats.set(world.userPlayerId, stats);
     }
+    if (stats) {
+      try {
+        applyCareerConsequences(world, session.match, world.userPlayerId, stats);
+      } catch (e) {
+        console.error("[playable] consequences", e);
+      }
+    }
+  }
+
+  // News + social (was missing — Social stayed empty)
+  try {
+    world.events.emit(Events.MATCH_FINISHED, {
+      matchId: session.match.id,
+      homeClubId: session.match.home.clubId,
+      awayClubId: session.match.away.clubId,
+      homeScore: session.match.homeScore,
+      awayScore: session.match.awayScore,
+    });
+  } catch {}
+  try {
+    onMatchFinished(world, {
+      matchId: session.match.id,
+      homeClubId: session.match.home.clubId,
+      awayClubId: session.match.away.clubId,
+      homeScore: session.match.homeScore,
+      awayScore: session.match.awayScore,
+    });
+  } catch (e) {
+    console.error("[playable] news", e);
   }
 }
 
 export function playableSnapshot(session: PlayableMatchSession) {
+  const m = session.match;
   return {
-    matchId: session.match.id,
+    matchId: m.id,
     phase: session.phase,
-    score: `${session.match.homeScore}–${session.match.awayScore}`,
-    homeClubId: session.match.home.clubId,
-    awayClubId: session.match.away.clubId,
+    score: `${m.homeScore ?? 0}-${m.awayScore ?? 0}`,
+    homeScore: m.homeScore ?? 0,
+    awayScore: m.awayScore ?? 0,
+    homeClubId: m.home.clubId,
+    awayClubId: m.away.clubId,
     moment: session.currentMoment,
     lastOutcome: session.lastOutcome,
     momentsResolved: session.momentsResolved,

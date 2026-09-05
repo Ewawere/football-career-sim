@@ -156,12 +156,10 @@ function bindActions() {
         await refresh();
         toast(res.ok ? "Job accepted" : "Failed");
       } else if (action === "match-start" || action === "match-finish") {
-        // Player career: one tap = play the next fixture to full time
         toast("Playing match…");
         try {
           await api("/api/match/start", { method: "POST", body: "{}" });
         } catch (e) {
-          // start may fail if already live — still try finish
           console.warn("match/start", e);
         }
         const res = await api("/api/match/finish", { method: "POST", body: "{}" });
@@ -169,10 +167,12 @@ function bindActions() {
         await refresh();
         await loadMatchStats();
         setView("match");
-        const score = res.state?.score || res.report?.score || lastMatch?.homeScore != null
-          ? `${lastMatch?.homeScore ?? "?"}-${lastMatch?.awayScore ?? "?"}`
-          : null;
-        toast(score ? `Full time ${res.state?.score || score}` : "Full time");
+        const st = res.state || {};
+        const score =
+          st.homeScore != null && st.awayScore != null
+            ? `${st.homeScore}-${st.awayScore}`
+            : st.score || null;
+        toast(score ? `Full time ${score}` : "Full time");
       } else if (action === "save") {
         await api("/api/save", { method: "POST", body: JSON.stringify({ name: "career" }) });
         toast("Saved");
